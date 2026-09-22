@@ -16,8 +16,50 @@ pub struct ImportReport {
 
 #[tauri::command]
 pub fn import_numbers(state: State<Db>, raw_input: String) -> Result<ImportReport, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
     import_numbers_into(&conn, &raw_input, &current_timestamp()).map_err(|e| e.to_string())
+}
+
+/// Minimal credentials entry point for M2 (SPEC section 5.4); the full
+/// Settings screen (target precision, retrieval policies, etc.) is M7.
+#[tauri::command]
+pub fn save_ops_credentials(
+    state: State<Db>,
+    consumer_key: String,
+    consumer_secret: String,
+) -> Result<(), String> {
+    crate::platform::credentials::save(
+        &state.data_dir,
+        &crate::platform::credentials::OpsCredentials {
+            consumer_key,
+            consumer_secret,
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn test_ops_connection(state: State<'_, Db>) -> Result<String, String> {
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    // A lightweight, well-known lookup just to prove the credentials work
+    // end-to-end (auth + a real data call), not to fetch anything useful.
+    client
+        .get("/published-data/publication/docdb/EP.1000000.A1/biblio")
+        .await
+        .map(|_| "connected".to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn run_import_jobs(state: State<'_, Db>) -> Result<crate::import_worker::WorkerSummary, String> {
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    Ok(crate::import_worker::run(&state.conn, &client).await)
 }
 
 /// Parses pasted/uploaded input (one number per line, SPEC 5.1), skips

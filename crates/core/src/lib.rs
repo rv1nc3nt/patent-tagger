@@ -3,6 +3,7 @@
 pub mod documents;
 pub mod jobs;
 pub mod number;
+pub mod selection;
 pub mod storage;
 pub mod time;
 

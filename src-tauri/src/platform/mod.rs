@@ -2,6 +2,7 @@
 //! mode, credential store (M2) and startup checks (M0/M10). This is the only
 //! module allowed to branch on target OS.
 
+pub mod credentials;
 #[cfg(windows)]
 mod windows;
 #[cfg(target_os = "linux")]

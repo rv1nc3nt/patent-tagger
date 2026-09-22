@@ -83,6 +83,12 @@ Could not locate real examples of "EP B1 with literally no abstract" or "EP A1 w
 - The real EP1000000 A1 abstract's first paragraph starts with a `[0001]` numbering prefix, which is normally a description-only convention — abstract text is stored as-is (not stripped), since SPEC section 5.5 (full text) is the only place paragraph-number handling is specified, not abstracts.
 - roxmltree's `Node::has_tag_name("foo")` compares local name only, ignoring the document's namespace — confirmed empirically against both the `http://www.epo.org/exchange`-namespaced biblio documents and the `http://ops.epo.org`-namespaced fault document.
 
+## 2026-09-22 — M2 live 20-document import: acceptance verified
+
+**Question:** M2's stated acceptance criterion is "a live import of 20 numbers works with real credentials."
+
+**Decision/result:** Verified via a temporary, non-committed test (real OPS calls, deleted immediately after, per CLAUDE.md's rule that tests never use the network) importing 20 real-or-plausible numbers end to end: parse → dedupe → enqueue → OPS fetch → selection cascade → persist. Result: 15 `fetched` (with real titles/abstracts), 4 correctly `no_english_abstract`, 1 correctly `error` (a genuinely nonexistent number, 404). No crashes, no hangs, no incorrect status. Also confirmed `pub_key` correctly treats requesting e.g. an EP number with no kind code as "all local variants" (OPS returns every kind for that number in one call), which handles cascade step 2 ("another publication of the same application") without an extra request in the common case.
+
 ## 2026-09-22 — M2 credentials scope
 
 **Question:** M2's acceptance needs real OPS credentials (live 20-document import, fixture recording), but the full Settings screen is M7.
