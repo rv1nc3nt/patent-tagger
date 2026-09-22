@@ -14,24 +14,31 @@ struct ImportPayload {
     pub_key: String,
 }
 
-#[derive(Debug, Default, serde::Serialize)]
-pub struct WorkerSummary {
-    pub fetched: u32,
-    pub no_english_abstract: u32,
-    pub errors: u32,
+/// One row of the Import screen's report (SPEC section 8): imported,
+/// no English abstract, not found, error - plus any related documents
+/// (same application/family, SPEC 5.2) discovered once this one was fetched.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DocumentOutcome {
+    pub doc_id: i64,
+    pub pub_key: String,
+    /// `"fetched" | "no_english_abstract" | "not_found" | "error"`.
+    pub status: String,
+    pub title: Option<String>,
+    pub error: Option<String>,
+    pub related_pub_keys: Vec<String>,
 }
 
 /// Processes every resumable `import_document` job once. Safe to call
-/// repeatedly (e.g. after a previous run was interrupted): jobs left in
-/// `running` from an earlier, incomplete pass are picked up again, per
-/// SPEC 5.4.
-pub async fn run(conn_mutex: &std::sync::Mutex<Connection>, client: &OpsClient) -> WorkerSummary {
-    let mut summary = WorkerSummary::default();
-
+/// repeatedly (e.g. after a previous run was interrupted, or to pick up
+/// jobs a retry moved back to pending): jobs left in `running` from an
+/// earlier, incomplete pass are picked up again, per SPEC 5.4.
+pub async fn run(conn_mutex: &std::sync::Mutex<Connection>, client: &OpsClient) -> Vec<DocumentOutcome> {
     let pending = {
         let conn = conn_mutex.lock().expect("db mutex poisoned");
         jobs::list_resumable(&conn, "import_document").unwrap_or_default()
     };
+
+    let mut results = Vec::with_capacity(pending.len());
 
     for job in pending {
         let now = now_iso8601();
@@ -44,37 +51,87 @@ pub async fn run(conn_mutex: &std::sync::Mutex<Connection>, client: &OpsClient) 
             Ok(p) => p,
             Err(e) => {
                 let conn = conn_mutex.lock().expect("db mutex poisoned");
-                let _ = jobs::mark_failed(&conn, job.id, &format!("bad job payload: {e}"), &now);
-                summary.errors += 1;
+                let message = format!("bad job payload: {e}");
+                let _ = jobs::mark_failed(&conn, job.id, &message, &now);
+                results.push(DocumentOutcome {
+                    doc_id: -1,
+                    pub_key: String::new(),
+                    status: "error".to_string(),
+                    title: None,
+                    error: Some(message),
+                    related_pub_keys: vec![],
+                });
                 continue;
             }
         };
 
-        match fetch_and_select(client, &payload.pub_key).await {
-            Ok(data) => {
-                let conn = conn_mutex.lock().expect("db mutex poisoned");
-                if let Err(e) = documents::store_fetched(&conn, payload.doc_id, &data) {
-                    let _ = jobs::mark_failed(&conn, job.id, &e.to_string(), &now);
-                    summary.errors += 1;
-                    continue;
-                }
-                let _ = jobs::mark_done(&conn, job.id, &now);
-                if data.abstract_text.is_some() {
-                    summary.fetched += 1;
-                } else {
-                    summary.no_english_abstract += 1;
-                }
+        results.push(process_one(conn_mutex, client, &job, &payload, &now).await);
+    }
+
+    results
+}
+
+async fn process_one(
+    conn_mutex: &std::sync::Mutex<Connection>,
+    client: &OpsClient,
+    job: &core_lib::jobs::JobRow,
+    payload: &ImportPayload,
+    now: &str,
+) -> DocumentOutcome {
+    match fetch_and_select(client, &payload.pub_key).await {
+        Ok(data) => {
+            let conn = conn_mutex.lock().expect("db mutex poisoned");
+            let title = data.title.clone();
+            let status = if data.abstract_text.is_some() {
+                "fetched"
+            } else {
+                "no_english_abstract"
+            };
+            if let Err(e) = documents::store_fetched(&conn, payload.doc_id, &data) {
+                let _ = jobs::mark_failed(&conn, job.id, &e.to_string(), now);
+                return DocumentOutcome {
+                    doc_id: payload.doc_id,
+                    pub_key: payload.pub_key.clone(),
+                    status: "error".to_string(),
+                    title: None,
+                    error: Some(e.to_string()),
+                    related_pub_keys: vec![],
+                };
             }
-            Err(e) => {
-                let conn = conn_mutex.lock().expect("db mutex poisoned");
+            let _ = jobs::mark_done(&conn, job.id, now);
+            let related_pub_keys = documents::find_related(&conn, payload.doc_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|d| d.pub_key)
+                .collect();
+            DocumentOutcome {
+                doc_id: payload.doc_id,
+                pub_key: payload.pub_key.clone(),
+                status: status.to_string(),
+                title,
+                error: None,
+                related_pub_keys,
+            }
+        }
+        Err(e) => {
+            let conn = conn_mutex.lock().expect("db mutex poisoned");
+            let not_found = matches!(&e, ops_lib::OpsError::Api { status, .. } if *status == 404);
+            if not_found {
+                let _ = documents::mark_not_found(&conn, payload.doc_id);
+            } else {
                 let _ = documents::mark_fetch_error(&conn, payload.doc_id, &e.to_string());
-                let _ = jobs::mark_failed(&conn, job.id, &e.to_string(), &now);
-                summary.errors += 1;
+            }
+            let _ = jobs::mark_failed(&conn, job.id, &e.to_string(), now);
+            DocumentOutcome {
+                doc_id: payload.doc_id,
+                pub_key: payload.pub_key.clone(),
+                status: if not_found { "not_found" } else { "error" }.to_string(),
+                title: None,
+                error: Some(e.to_string()),
+                related_pub_keys: vec![],
             }
         }
     }
-
-    summary
 }
 
 async fn fetch_and_select(

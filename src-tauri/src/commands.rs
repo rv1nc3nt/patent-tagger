@@ -54,12 +54,36 @@ pub async fn test_ops_connection(state: State<'_, Db>) -> Result<String, String>
 }
 
 #[tauri::command]
-pub async fn run_import_jobs(state: State<'_, Db>) -> Result<crate::import_worker::WorkerSummary, String> {
+pub async fn run_import_jobs(
+    state: State<'_, Db>,
+) -> Result<Vec<crate::import_worker::DocumentOutcome>, String> {
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
     Ok(crate::import_worker::run(&state.conn, &client).await)
+}
+
+/// Moves the failed job for `doc_id` back to pending (SPEC section 8's
+/// retry button). Does not itself re-fetch - call `run_import_jobs` again
+/// afterward.
+#[tauri::command]
+pub fn retry_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let now = current_timestamp();
+    let failed = jobs::list_failed(&conn, "import_document").map_err(|e| e.to_string())?;
+    let job = failed
+        .into_iter()
+        .find(|j| job_payload_doc_id(&j.payload) == Some(doc_id))
+        .ok_or_else(|| format!("no failed import job found for document {doc_id}"))?;
+    jobs::retry(&conn, job.id, &now).map_err(|e| e.to_string())
+}
+
+fn job_payload_doc_id(payload: &str) -> Option<i64> {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()?
+        .get("doc_id")?
+        .as_i64()
 }
 
 /// Parses pasted/uploaded input (one number per line, SPEC 5.1), skips

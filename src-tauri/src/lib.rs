@@ -13,6 +13,7 @@ pub fn run() {
       commands::save_ops_credentials,
       commands::test_ops_connection,
       commands::run_import_jobs,
+      commands::retry_document,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

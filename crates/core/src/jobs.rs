@@ -50,6 +50,20 @@ pub fn list_resumable(conn: &Connection, kind: &str) -> Result<Vec<JobRow>, Stor
     Ok(rows)
 }
 
+/// Failed jobs of `kind`, oldest first — for the Import screen's retry
+/// button (SPEC section 8).
+pub fn list_failed(conn: &Connection, kind: &str) -> Result<Vec<JobRow>, StorageError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, payload, state, attempts, last_error FROM jobs
+         WHERE kind = ?1 AND state = ?2
+         ORDER BY id ASC",
+    )?;
+    let rows = stmt
+        .query_map(params![kind, STATE_FAILED], row_to_job)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 pub fn mark_running(conn: &Connection, id: i64, updated_at: &str) -> Result<(), StorageError> {
     conn.execute(
         "UPDATE jobs SET state = ?1, attempts = attempts + 1, updated_at = ?2 WHERE id = ?3",
@@ -137,6 +151,21 @@ mod tests {
         mark_done(&conn, id, NOW).unwrap();
 
         assert!(list_resumable(&conn, "import_document").unwrap().is_empty());
+    }
+
+    #[test]
+    fn list_failed_returns_only_failed_jobs() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let ok_id = enqueue(&conn, "import_document", "{}", NOW).unwrap();
+        let failed_id = enqueue(&conn, "import_document", "{}", NOW).unwrap();
+        mark_running(&conn, ok_id, NOW).unwrap();
+        mark_done(&conn, ok_id, NOW).unwrap();
+        mark_running(&conn, failed_id, NOW).unwrap();
+        mark_failed(&conn, failed_id, "boom", NOW).unwrap();
+
+        let failed = list_failed(&conn, "import_document").unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, failed_id);
     }
 
     #[test]

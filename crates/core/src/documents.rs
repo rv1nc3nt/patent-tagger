@@ -93,6 +93,18 @@ pub fn mark_fetch_error(conn: &Connection, doc_id: i64, error: &str) -> Result<(
     Ok(())
 }
 
+/// SPEC section 4.2's `fetch_status` distinguishes `not_found` (OPS has no
+/// such publication) from `error` (something went wrong trying to find
+/// out), so the Import report can show a "not found" section rather than
+/// lumping every failure under "errors".
+pub fn mark_not_found(conn: &Connection, doc_id: i64) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE documents SET fetch_status = 'not_found', fetch_error = NULL WHERE id = ?1",
+        params![doc_id],
+    )?;
+    Ok(())
+}
+
 pub fn find_by_pub_key(
     conn: &Connection,
     pub_key: &str,
@@ -209,6 +221,19 @@ mod tests {
 
         let doc = find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
         assert_eq!(doc.fetch_status, "error");
+    }
+
+    #[test]
+    fn mark_not_found_is_distinct_from_a_generic_error() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let doc_id = insert_pending(&conn, "EP9999999", "EP9999999", "2026-01-01T00:00:00Z")
+            .unwrap()
+            .unwrap();
+
+        mark_not_found(&conn, doc_id).unwrap();
+
+        let doc = find_by_pub_key(&conn, "EP9999999").unwrap().unwrap();
+        assert_eq!(doc.fetch_status, "not_found");
     }
 
     #[test]
