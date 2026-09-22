@@ -171,3 +171,87 @@ export function enableAutomaticMode(tagId: number): Promise<TagRow> {
 export function disableAutomaticMode(tagId: number): Promise<void> {
   return invoke("disable_automatic_mode", { tagId });
 }
+
+export interface SettingsView {
+  target_precision: number;
+  target_recall: number;
+  audit_rate: number;
+  full_automation_enabled: boolean;
+  fulltext_policy: string;
+  drawings_policy: string;
+}
+
+export function getSettings(): Promise<SettingsView> {
+  return invoke("get_settings");
+}
+
+export function updateSettings(view: SettingsView): Promise<void> {
+  return invoke("update_settings", { view });
+}
+
+export function dataDirectory(): Promise<string> {
+  return invoke("data_directory");
+}
+
+export function createBackup(destPath: string): Promise<void> {
+  return invoke("create_backup", { destPath });
+}
+
+export function restoreBackup(srcPath: string): Promise<void> {
+  return invoke("restore_backup", { srcPath });
+}
+
+export function exportTagSchema(destPath: string): Promise<void> {
+  return invoke("export_tag_schema", { destPath });
+}
+
+export function importTagSchema(srcPath: string): Promise<number> {
+  return invoke("import_tag_schema", { srcPath });
+}
+
+export interface LibraryFilters {
+  query: string | null;
+  include_tag_ids: number[];
+  exclude_tag_ids: number[];
+  label_source: string | null;
+  review_state: string | null;
+}
+
+export interface LibraryRow {
+  id: number;
+  pub_key: string;
+  title: string | null;
+  review_state: string;
+  tags: string[];
+}
+
+export function librarySearch(filters: LibraryFilters): Promise<LibraryRow[]> {
+  return invoke("library_search", { filters });
+}
+
+export interface SimilarDocument {
+  id: number;
+  pub_key: string;
+  title: string | null;
+  similarity: number;
+}
+
+export function similarDocuments(docId: number, limit: number): Promise<SimilarDocument[]> {
+  return invoke("similar_documents", { docId, limit });
+}
+
+export function exportCsv(destPath: string): Promise<void> {
+  return invoke("export_csv", { destPath });
+}
+
+export function exportJson(destPath: string): Promise<void> {
+  return invoke("export_json", { destPath });
+}
+
+export function exportTagList(tagId: number, destPath: string): Promise<void> {
+  return invoke("export_tag_list", { tagId, destPath });
+}
+
+export function exportDocuments(docIds: number[], destDir: string): Promise<number> {
+  return invoke("export_documents", { docIds, destDir });
+}

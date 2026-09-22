@@ -1,28 +1,39 @@
 <script lang="ts">
-  import CredentialsPanel from "./lib/CredentialsPanel.svelte";
   import ImportScreen from "./lib/ImportScreen.svelte";
+  import LibraryScreen from "./lib/LibraryScreen.svelte";
   import MetricsScreen from "./lib/MetricsScreen.svelte";
   import ReviewScreen from "./lib/ReviewScreen.svelte";
+  import SettingsScreen from "./lib/SettingsScreen.svelte";
 
-  let view = $state<"import" | "review" | "metrics">("import");
+  type View = "import" | "review" | "metrics" | "library" | "settings";
+  let view = $state<View>("import");
+
+  const tabs: { id: View; label: string }[] = [
+    { id: "import", label: "Import" },
+    { id: "review", label: "Review" },
+    { id: "metrics", label: "Metrics" },
+    { id: "library", label: "Library" },
+    { id: "settings", label: "Settings" },
+  ];
 </script>
 
 <main>
   <nav class="tabs">
-    <button class:active={view === "import"} onclick={() => (view = "import")}>Import</button>
-    <button class:active={view === "review"} onclick={() => (view = "review")}>Review</button>
-    <button class:active={view === "metrics"} onclick={() => (view = "metrics")}>Metrics</button>
+    {#each tabs as tab (tab.id)}
+      <button class:active={view === tab.id} onclick={() => (view = tab.id)}>{tab.label}</button>
+    {/each}
   </nav>
 
   {#if view === "import"}
-    <div class="top">
-      <CredentialsPanel />
-    </div>
     <ImportScreen />
   {:else if view === "review"}
     <ReviewScreen />
-  {:else}
+  {:else if view === "metrics"}
     <MetricsScreen />
+  {:else if view === "library"}
+    <LibraryScreen />
+  {:else}
+    <SettingsScreen />
   {/if}
 </main>
 
@@ -46,10 +57,5 @@
   .tabs button.active {
     color: var(--text-h);
     border-bottom-color: var(--accent);
-  }
-  .top {
-    max-width: 640px;
-    margin: 1rem auto 0;
-    padding: 0 1.5rem;
   }
 </style>
