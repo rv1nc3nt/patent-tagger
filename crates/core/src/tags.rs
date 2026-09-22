@@ -23,6 +23,46 @@ pub struct TagRow {
     pub auto_enabled: bool,
 }
 
+/// SPEC section 8: "Tag-schema export and import (JSON)". Just the
+/// definitional part of a tag - not learned state (threshold, auto mode),
+/// which is model- and history-specific and wouldn't mean anything
+/// transplanted into a different installation.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TagSchema {
+    pub name: String,
+    pub definition: String,
+    pub color: Option<String>,
+    pub hotkey: Option<String>,
+}
+
+pub fn export_schema(conn: &Connection) -> Result<Vec<TagSchema>, StorageError> {
+    let mut stmt = conn.prepare("SELECT name, definition, color, hotkey FROM tags WHERE archived = 0 ORDER BY name ASC")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(TagSchema {
+                name: row.get(0)?,
+                definition: row.get(1)?,
+                color: row.get(2)?,
+                hotkey: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Whether a tag with this name already exists (import is add-only - see
+/// `src-tauri::commands::import_tag_schema` - so existing tags and
+/// whatever they've already learned are never touched).
+pub fn exists_by_name(conn: &Connection, name: &str) -> Result<bool, StorageError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM tags WHERE name = ?1)",
+        params![name],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n != 0)
+    .map_err(StorageError::from)
+}
+
 pub fn create(
     conn: &Connection,
     name: &str,
@@ -172,5 +212,33 @@ mod tests {
         let tag = get(&conn, id).unwrap().unwrap();
         assert_eq!(tag.threshold, Some(0.73));
         assert!(tag.auto_enabled);
+    }
+
+    #[test]
+    fn export_schema_excludes_archived_tags_and_learned_state() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let battery_id = create(&conn, "Battery", "Relates to batteries", Some("#f00"), Some("b"), NOW).unwrap();
+        set_threshold(&conn, battery_id, Some(0.8)).unwrap();
+        let archived_id = create(&conn, "Old", "No longer used", None, None, NOW).unwrap();
+        archive(&conn, archived_id).unwrap();
+
+        let schema = export_schema(&conn).unwrap();
+        assert_eq!(
+            schema,
+            vec![TagSchema {
+                name: "Battery".to_string(),
+                definition: "Relates to batteries".to_string(),
+                color: Some("#f00".to_string()),
+                hotkey: Some("b".to_string()),
+            }]
+        );
+    }
+
+    #[test]
+    fn exists_by_name_reflects_current_tags() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        assert!(!exists_by_name(&conn, "Battery").unwrap());
+        create(&conn, "Battery", "Relates to batteries", None, None, NOW).unwrap();
+        assert!(exists_by_name(&conn, "Battery").unwrap());
     }
 }

@@ -1,4 +1,5 @@
 mod automation;
+mod backup;
 mod commands;
 mod db;
 mod import_worker;

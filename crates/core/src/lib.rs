@@ -4,6 +4,7 @@ pub mod audit;
 pub mod classifier;
 pub mod documents;
 pub mod embeddings;
+pub mod export;
 pub mod jobs;
 pub mod labels;
 pub mod number;
