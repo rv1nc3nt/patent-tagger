@@ -1,0 +1,7 @@
+/target
+/models
+node_modules
+/ui/dist
+*.db
+*.db-*
+.env

@@ -1,0 +1,12 @@
+[package]
+name = "patent-ops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "ops_lib"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "2"

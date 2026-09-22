@@ -1,0 +1,12 @@
+[package]
+name = "patent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "core_lib"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "2"
