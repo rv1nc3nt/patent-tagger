@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "patent-tagger",
   "version": "0.1.0",
-  "identifier": "fr.famillevincent.patenttagger",
+  "identifier": "eu.rvincent.patenttagger",
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:5173",

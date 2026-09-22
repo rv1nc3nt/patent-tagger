@@ -36,7 +36,7 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 
 **Question:** `cargo tauri init` requires a reverse-domain bundle identifier; the spec doesn't state one.
 
-**Decision:** `fr.famillevincent.patenttagger`, based on the project owner's domain. Change if a different one is wanted before the first real release (the identifier should not change after distributing builds, since OS-level app identity depends on it).
+**Decision:** `eu.rvincent.patenttagger`, based on the project owner's domain. Change if a different one is wanted before the first real release (the identifier should not change after distributing builds, since OS-level app identity depends on it).
 
 ## 2026-09-22 — `fetch-model` left out of CI for now
 
