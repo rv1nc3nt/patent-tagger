@@ -1,3 +1,6 @@
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 fn main() {
-    println!("patent-tagger: Tauri app not yet scaffolded (milestone M0)");
+  app_lib::run();
 }
