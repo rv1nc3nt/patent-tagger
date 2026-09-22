@@ -62,6 +62,43 @@ pub fn validate_document(
     Ok(())
 }
 
+/// Writes an automatic `pos` label (SPEC 7.5: "writes pos labels with
+/// source = auto, the confidence, and the model_version, for scores >=
+/// threshold") - but never overwrites an existing human decision (the
+/// conditional `WHERE labels.source != 'human'` on the upsert), and skips
+/// `label_history` when that happens, since nothing actually changed.
+/// Returns whether it actually wrote anything.
+#[allow(clippy::too_many_arguments)]
+pub fn write_automatic_label(
+    conn: &Connection,
+    doc_id: i64,
+    tag_id: i64,
+    confidence: f32,
+    model_version: &str,
+    tag_version: i64,
+    now: &str,
+) -> Result<bool, StorageError> {
+    let changed = conn.execute(
+        "INSERT INTO labels (doc_id, tag_id, state, source, confidence, model_version, tag_version, created_at)
+         VALUES (?1, ?2, 'pos', 'auto', ?3, ?4, ?5, ?6)
+         ON CONFLICT (doc_id, tag_id) DO UPDATE SET
+            state = excluded.state, source = excluded.source, confidence = excluded.confidence,
+            model_version = excluded.model_version, tag_version = excluded.tag_version,
+            created_at = excluded.created_at
+         WHERE labels.source != 'human'",
+        params![doc_id, tag_id, confidence, model_version, tag_version, now],
+    )? > 0;
+
+    if changed {
+        conn.execute(
+            "INSERT INTO label_history (doc_id, tag_id, state, source, confidence, model_version, tag_version, created_at)
+             VALUES (?1, ?2, 'pos', 'auto', ?3, ?4, ?5, ?6)",
+            params![doc_id, tag_id, confidence, model_version, tag_version, now],
+        )?;
+    }
+    Ok(changed)
+}
+
 pub fn skip_document(conn: &Connection, doc_id: i64) -> Result<(), StorageError> {
     conn.execute(
         "UPDATE documents SET review_state = 'skipped' WHERE id = ?1",
@@ -195,5 +232,48 @@ mod tests {
         let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
         assert_eq!(doc.review_state, "skipped");
         assert!(positive_tag_ids(&conn, doc_id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn write_automatic_label_sets_pos_with_confidence_and_model_version() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, _solar) = setup(&conn);
+
+        let changed =
+            write_automatic_label(&conn, doc_id, battery.id, 0.87, "model@v1", 1, NOW).unwrap();
+        assert!(changed);
+
+        let (state, source, confidence): (String, String, f64) = conn
+            .query_row(
+                "SELECT state, source, confidence FROM labels WHERE doc_id = ?1 AND tag_id = ?2",
+                params![doc_id, battery.id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "pos");
+        assert_eq!(source, "auto");
+        assert!((confidence - 0.87).abs() < 1e-6);
+    }
+
+    #[test]
+    fn write_automatic_label_never_overwrites_an_existing_human_label() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+
+        // Human explicitly said "no" to battery.
+        let checked: HashSet<i64> = [solar.id].into_iter().collect();
+        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &checked, NOW).unwrap();
+
+        let changed = write_automatic_label(&conn, doc_id, battery.id, 0.99, "model@v1", 1, NOW).unwrap();
+        assert!(!changed, "an automatic label must never overwrite a human decision");
+
+        let state: String = conn
+            .query_row(
+                "SELECT state FROM labels WHERE doc_id = ?1 AND tag_id = ?2",
+                params![doc_id, battery.id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "neg", "the human's neg decision must survive");
     }
 }

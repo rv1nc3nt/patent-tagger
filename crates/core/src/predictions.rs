@@ -93,6 +93,51 @@ fn precision_recall_at(items: &[ScoredLabel], threshold: f32) -> (Option<f32>, O
     (precision, recall)
 }
 
+/// SPEC 7.5: eligibility for automatic mode requires at least this many
+/// positives and this many evaluated documents (in the same rolling
+/// window as the rest of prequential evaluation).
+pub const MIN_POSITIVES_FOR_AUTO: i64 = 30;
+pub const MIN_EVALUATED_FOR_AUTO: i64 = 150;
+
+/// The lowest threshold (searched on a 0.01 grid) reaching `target_precision`
+/// on the window, or `None` if no threshold does (SPEC 7.5).
+fn calibrate_from_items(items: &[ScoredLabel], target_precision: f32) -> Option<f32> {
+    (0..=100).map(|step| step as f32 * 0.01).find(|&threshold| {
+        precision_recall_at(items, threshold).0.is_some_and(|p| p >= target_precision)
+    })
+}
+
+pub fn calibrate_threshold(
+    conn: &Connection,
+    tag_id: i64,
+    target_precision: f32,
+) -> Result<Option<f32>, StorageError> {
+    let items = windowed_scored_labels(conn, tag_id)?;
+    Ok(calibrate_from_items(&items, target_precision))
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Eligibility {
+    pub eligible: bool,
+    pub n_pos: i64,
+    pub n_evaluated: i64,
+    pub calibrated_threshold: Option<f32>,
+}
+
+pub fn tag_eligibility(
+    conn: &Connection,
+    tag_id: i64,
+    target_precision: f32,
+) -> Result<Eligibility, StorageError> {
+    let items = windowed_scored_labels(conn, tag_id)?;
+    let n_evaluated = items.len() as i64;
+    let n_pos = items.iter().filter(|i| i.is_pos).count() as i64;
+    let calibrated_threshold = calibrate_from_items(&items, target_precision);
+    let eligible =
+        n_pos >= MIN_POSITIVES_FOR_AUTO && n_evaluated >= MIN_EVALUATED_FOR_AUTO && calibrated_threshold.is_some();
+    Ok(Eligibility { eligible, n_pos, n_evaluated, calibrated_threshold })
+}
+
 pub fn tag_metrics(conn: &Connection, tag_id: i64) -> Result<TagMetrics, StorageError> {
     let items = windowed_scored_labels(conn, tag_id)?;
     let support_total = items.len() as i64;
@@ -204,5 +249,74 @@ mod tests {
 
         let metrics = tag_metrics(&conn, tag_id).unwrap();
         assert_eq!(metrics.support_total, 300);
+    }
+
+    #[test]
+    fn calibrate_threshold_finds_the_lowest_threshold_reaching_target_precision() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+
+        for i in 0..9 {
+            validated_doc_with_prediction(&conn, &format!("EPPOS{i:04}"), &tag, 0.8, true);
+        }
+        // A false positive at 0.7 and another at 0.2: including the 0.2 one
+        // drops precision to 9/11 ~= 0.818 (below 0.9); excluding just the
+        // 0.2 one (threshold > 0.2) gives 9/10 = 0.9 (meets target).
+        validated_doc_with_prediction(&conn, "EPFP0700", &tag, 0.7, false);
+        validated_doc_with_prediction(&conn, "EPFP0200", &tag, 0.2, false);
+
+        let threshold = calibrate_threshold(&conn, tag_id, 0.9).unwrap().unwrap();
+        assert!((threshold - 0.21).abs() < 1e-6, "expected 0.21, got {threshold}");
+
+        let (precision, _) = precision_recall_at(&windowed_scored_labels(&conn, tag_id).unwrap(), threshold);
+        assert_eq!(precision, Some(0.9));
+    }
+
+    #[test]
+    fn calibrate_threshold_is_none_when_target_is_unreachable() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+        // 1 true positive, 1 false positive at the same score - precision
+        // can never exceed 0.5 no matter the threshold.
+        validated_doc_with_prediction(&conn, "EPPOS0001", &tag, 0.9, true);
+        validated_doc_with_prediction(&conn, "EPFP00001", &tag, 0.9, false);
+
+        assert_eq!(calibrate_threshold(&conn, tag_id, 0.95).unwrap(), None);
+    }
+
+    #[test]
+    fn eligibility_requires_positives_evaluated_count_and_a_reachable_threshold() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+
+        // Only 10 positives, 20 evaluated total - below both minimums.
+        for i in 0..10 {
+            validated_doc_with_prediction(&conn, &format!("EPPOS{i:04}"), &tag, 0.9, true);
+        }
+        for i in 0..10 {
+            validated_doc_with_prediction(&conn, &format!("EPNEG{i:04}"), &tag, 0.1, false);
+        }
+        let not_yet = tag_eligibility(&conn, tag_id, 0.95).unwrap();
+        assert!(!not_yet.eligible);
+        assert_eq!(not_yet.n_pos, 10);
+        assert_eq!(not_yet.n_evaluated, 20);
+
+        // Cleanly separated scores, so target precision is always
+        // reachable once there's enough data: 30 positives, 120
+        // negatives = 150 evaluated, both minimums met.
+        for i in 10..30 {
+            validated_doc_with_prediction(&conn, &format!("EPPOS{i:04}"), &tag, 0.9, true);
+        }
+        for i in 10..120 {
+            validated_doc_with_prediction(&conn, &format!("EPNEG{i:04}"), &tag, 0.1, false);
+        }
+        let now_eligible = tag_eligibility(&conn, tag_id, 0.95).unwrap();
+        assert!(now_eligible.eligible);
+        assert_eq!(now_eligible.n_pos, 30);
+        assert_eq!(now_eligible.n_evaluated, 150);
+        assert!(now_eligible.calibrated_threshold.is_some());
     }
 }

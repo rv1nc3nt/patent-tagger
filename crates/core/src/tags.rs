@@ -14,6 +14,13 @@ pub struct TagRow {
     pub hotkey: Option<String>,
     pub version: i64,
     pub archived: bool,
+    /// SPEC 7.5: the calibrated pre-check/auto-decision threshold, once
+    /// calibration has found one; `None` falls back to 0.5 everywhere it's
+    /// used.
+    pub threshold: Option<f32>,
+    /// SPEC 7.5: "the user enables automatic mode per tag explicitly; it is
+    /// never enabled by default."
+    pub auto_enabled: bool,
 }
 
 pub fn create(
@@ -32,18 +39,18 @@ pub fn create(
     Ok(conn.last_insert_rowid())
 }
 
+const SELECT_COLUMNS: &str = "id, name, definition, color, hotkey, version, archived, threshold, auto_enabled";
+
 pub fn list_active(conn: &Connection) -> Result<Vec<TagRow>, StorageError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, name, definition, color, hotkey, version, archived
-         FROM tags WHERE archived = 0 ORDER BY name ASC",
-    )?;
+    let mut stmt =
+        conn.prepare(&format!("SELECT {SELECT_COLUMNS} FROM tags WHERE archived = 0 ORDER BY name ASC"))?;
     let rows = stmt.query_map([], row_to_tag)?.collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
 pub fn get(conn: &Connection, id: i64) -> Result<Option<TagRow>, StorageError> {
     conn.query_row(
-        "SELECT id, name, definition, color, hotkey, version, archived FROM tags WHERE id = ?1",
+        &format!("SELECT {SELECT_COLUMNS} FROM tags WHERE id = ?1"),
         params![id],
         row_to_tag,
     )
@@ -53,6 +60,22 @@ pub fn get(conn: &Connection, id: i64) -> Result<Option<TagRow>, StorageError> {
 
 pub fn archive(conn: &Connection, id: i64) -> Result<(), StorageError> {
     conn.execute("UPDATE tags SET archived = 1 WHERE id = ?1", params![id])?;
+    Ok(())
+}
+
+pub fn set_threshold(conn: &Connection, tag_id: i64, threshold: Option<f32>) -> Result<(), StorageError> {
+    conn.execute("UPDATE tags SET threshold = ?1 WHERE id = ?2", params![threshold, tag_id])?;
+    Ok(())
+}
+
+/// Unconditional - callers (the `enable_automatic_mode` command) are
+/// responsible for checking eligibility first (SPEC 7.5: "Automatic mode
+/// unavailable before eligibility").
+pub fn set_auto_enabled(conn: &Connection, tag_id: i64, enabled: bool) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE tags SET auto_enabled = ?1 WHERE id = ?2",
+        params![enabled as i64, tag_id],
+    )?;
     Ok(())
 }
 
@@ -76,6 +99,8 @@ fn row_to_tag(row: &rusqlite::Row) -> rusqlite::Result<TagRow> {
         hotkey: row.get(4)?,
         version: row.get(5)?,
         archived: row.get::<_, i64>(6)? != 0,
+        threshold: row.get(7)?,
+        auto_enabled: row.get::<_, i64>(8)? != 0,
     })
 }
 
@@ -125,5 +150,27 @@ mod tests {
         .unwrap();
 
         assert_eq!(count_human_positives(&conn, tag_id).unwrap(), 1);
+    }
+
+    #[test]
+    fn new_tags_have_no_threshold_and_are_not_auto_enabled() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let id = create(&conn, "Battery", "Relates to batteries", None, None, NOW).unwrap();
+        let tag = get(&conn, id).unwrap().unwrap();
+        assert_eq!(tag.threshold, None);
+        assert!(!tag.auto_enabled);
+    }
+
+    #[test]
+    fn set_threshold_and_set_auto_enabled_round_trip() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let id = create(&conn, "Battery", "Relates to batteries", None, None, NOW).unwrap();
+
+        set_threshold(&conn, id, Some(0.73)).unwrap();
+        set_auto_enabled(&conn, id, true).unwrap();
+
+        let tag = get(&conn, id).unwrap().unwrap();
+        assert_eq!(tag.threshold, Some(0.73));
+        assert!(tag.auto_enabled);
     }
 }
