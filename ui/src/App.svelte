@@ -1,15 +1,17 @@
 <script lang="ts">
   import CredentialsPanel from "./lib/CredentialsPanel.svelte";
   import ImportScreen from "./lib/ImportScreen.svelte";
+  import MetricsScreen from "./lib/MetricsScreen.svelte";
   import ReviewScreen from "./lib/ReviewScreen.svelte";
 
-  let view = $state<"import" | "review">("import");
+  let view = $state<"import" | "review" | "metrics">("import");
 </script>
 
 <main>
   <nav class="tabs">
     <button class:active={view === "import"} onclick={() => (view = "import")}>Import</button>
     <button class:active={view === "review"} onclick={() => (view = "review")}>Review</button>
+    <button class:active={view === "metrics"} onclick={() => (view = "metrics")}>Metrics</button>
   </nav>
 
   {#if view === "import"}
@@ -17,8 +19,10 @@
       <CredentialsPanel />
     </div>
     <ImportScreen />
-  {:else}
+  {:else if view === "review"}
     <ReviewScreen />
+  {:else}
+    <MetricsScreen />
   {/if}
 </main>
 

@@ -119,3 +119,27 @@ export function validateDocument(docId: number, checkedTagIds: number[]): Promis
 export function skipDocument(docId: number): Promise<void> {
   return invoke("skip_document", { docId });
 }
+
+export interface PrPoint {
+  threshold: number;
+  precision: number | null;
+  recall: number | null;
+}
+
+export interface TagMetrics {
+  name: string;
+  tag_id: number;
+  support_total: number;
+  support_pos: number;
+  precision: number | null;
+  recall: number | null;
+  pr_curve: PrPoint[];
+}
+
+export function tagMetrics(): Promise<TagMetrics[]> {
+  return invoke("tag_metrics");
+}
+
+export function retrainNow(): Promise<number> {
+  return invoke("retrain_now");
+}

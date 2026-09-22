@@ -8,6 +8,11 @@
   --success: #1a7f37;
   --danger: #c4372f;
   --muted: #6b6375;
+  /* Okabe-Ito colorblind-safe pair, for the precision/recall series in
+     the Metrics PR curve. Fixed identity: precision is always blue,
+     recall is always orange, never reassigned. */
+  --series-precision: #0072b2;
+  --series-recall: #e69f00;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -33,6 +38,10 @@
     --success: #4ade80;
     --danger: #f87171;
     --muted: #9ca3af;
+    /* Lightened for contrast against the dark surface; same fixed
+       precision/recall identity as light mode. */
+    --series-precision: #5ab4e6;
+    --series-recall: #f5c451;
   }
 }
 
