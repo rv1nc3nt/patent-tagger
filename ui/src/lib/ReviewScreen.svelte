@@ -7,6 +7,7 @@
     validateDocument,
     type DocumentView,
     type QueueEntry,
+    type QueueOrdering,
   } from "./api";
   import TagsPanel from "./TagsPanel.svelte";
 
@@ -16,6 +17,8 @@
   let checked = $state<Set<number>>(new Set());
   let tagFilter = $state("");
   let error = $state("");
+  let notice = $state("");
+  let ordering = $state<QueueOrdering>("import");
   let filterInput = $state<HTMLInputElement | undefined>(undefined);
 
   const visibleTags = $derived(
@@ -25,12 +28,18 @@
   export async function refreshQueue() {
     error = "";
     try {
-      queue = await reviewQueue();
+      queue = await reviewQueue(ordering);
       if (index >= queue.length) index = Math.max(0, queue.length - 1);
       await loadCurrent();
     } catch (err) {
       error = String(err);
     }
+  }
+
+  function handleOrderingChange(next: QueueOrdering) {
+    ordering = next;
+    index = 0;
+    refreshQueue();
   }
 
   async function loadCurrent() {
@@ -70,7 +79,11 @@
     if (!doc) return;
     error = "";
     try {
-      await validateDocument(doc.id, Array.from(checked));
+      const result = await validateDocument(doc.id, Array.from(checked));
+      notice =
+        result.auto_disabled_tags.length > 0
+          ? `Automatic mode disabled (audited precision dropped below target) for: ${result.auto_disabled_tags.join(", ")}`
+          : "";
       await advanceAfterRemoval();
     } catch (err) {
       error = String(err);
@@ -142,13 +155,20 @@
   <TagsPanel onchange={refreshQueue} />
 
   {#if error}<p class="error-banner">{error}</p>{/if}
+  {#if notice}<p class="notice">{notice}</p>{/if}
 
   {#if queue.length === 0}
     <p class="empty">Nothing to review. Import and fetch some documents first.</p>
   {:else}
     <div class="panes">
       <section class="queue-pane">
-        <h2>Queue ({index + 1} / {queue.length})</h2>
+        <div class="queue-header">
+          <h2>Queue ({index + 1} / {queue.length})</h2>
+          <select value={ordering} onchange={(e) => handleOrderingChange(e.currentTarget.value as QueueOrdering)}>
+            <option value="import">Import order</option>
+            <option value="uncertain">Most uncertain first</option>
+          </select>
+        </div>
         <ul>
           {#each queue as entry, i (entry.id)}
             <li class:current={i === index}>
@@ -231,8 +251,24 @@
   .error-banner {
     color: var(--danger);
   }
+  .notice {
+    color: var(--series-recall);
+  }
   .empty {
     color: var(--muted);
+  }
+  .queue-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+  }
+  .queue-header h2 {
+    margin: 0;
+  }
+  .queue-header select {
+    font-size: 0.8rem;
+    padding: 0.2rem;
   }
   .panes {
     display: grid;

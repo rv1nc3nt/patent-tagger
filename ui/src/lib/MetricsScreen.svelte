@@ -1,16 +1,39 @@
 <script lang="ts">
-  import { retrainNow, tagMetrics, type TagMetrics } from "./api";
+  import {
+    disableAutomaticMode,
+    enableAutomaticMode,
+    listTags,
+    retrainNow,
+    tagEligibility,
+    tagMetrics,
+    type Eligibility,
+    type TagMetrics,
+    type TagRow,
+  } from "./api";
   import PrCurveChart from "./PrCurveChart.svelte";
 
-  let metrics = $state<TagMetrics[]>([]);
+  interface Row {
+    tag: TagRow;
+    metrics: TagMetrics;
+    eligibility: Eligibility;
+  }
+
+  let rows = $state<Row[]>([]);
   let error = $state("");
   let retraining = $state(false);
   let retrainMessage = $state("");
+  let togglingTagId = $state<number | null>(null);
 
   async function refresh() {
     error = "";
     try {
-      metrics = await tagMetrics();
+      const [tags, metrics] = await Promise.all([listTags(), tagMetrics()]);
+      const eligibilities = await Promise.all(tags.map((t) => tagEligibility(t.id)));
+      rows = tags.map((tag, i) => ({
+        tag,
+        metrics: metrics.find((m) => m.tag_id === tag.id)!,
+        eligibility: eligibilities[i],
+      }));
     } catch (err) {
       error = String(err);
     }
@@ -27,6 +50,23 @@
       error = String(err);
     } finally {
       retraining = false;
+    }
+  }
+
+  async function handleToggleAuto(row: Row) {
+    togglingTagId = row.tag.id;
+    error = "";
+    try {
+      if (row.tag.auto_enabled) {
+        await disableAutomaticMode(row.tag.id);
+      } else {
+        await enableAutomaticMode(row.tag.id);
+      }
+      await refresh();
+    } catch (err) {
+      error = String(err);
+    } finally {
+      togglingTagId = null;
     }
   }
 
@@ -48,7 +88,7 @@
 
   {#if error}<p class="error-banner">{error}</p>{/if}
 
-  {#if metrics.length === 0}
+  {#if rows.length === 0}
     <p class="empty">No tags yet.</p>
   {:else}
     <table>
@@ -58,17 +98,34 @@
           <th>Support</th>
           <th>Precision</th>
           <th>Recall</th>
+          <th>Threshold</th>
+          <th>Automatic mode</th>
           <th>PR curve</th>
         </tr>
       </thead>
       <tbody>
-        {#each metrics as row (row.tag_id)}
+        {#each rows as row (row.tag.id)}
           <tr>
-            <td>{row.name}</td>
-            <td>{row.support_pos} / {row.support_total}</td>
-            <td>{fmt(row.precision)}</td>
-            <td>{fmt(row.recall)}</td>
-            <td><PrCurveChart points={row.pr_curve} /></td>
+            <td>{row.tag.name}</td>
+            <td>{row.metrics.support_pos} / {row.metrics.support_total}</td>
+            <td>{fmt(row.metrics.precision)}</td>
+            <td>{fmt(row.metrics.recall)}</td>
+            <td>{row.tag.threshold === null ? "not calibrated" : row.tag.threshold.toFixed(2)}</td>
+            <td>
+              <button
+                onclick={() => handleToggleAuto(row)}
+                disabled={togglingTagId === row.tag.id || (!row.tag.auto_enabled && !row.eligibility.eligible)}
+                title={row.eligibility.eligible
+                  ? ""
+                  : `not yet eligible: ${row.eligibility.n_pos}/30 positives, ${row.eligibility.n_evaluated}/150 evaluated`}
+              >
+                {row.tag.auto_enabled ? "Disable" : "Enable"}
+              </button>
+              {#if !row.tag.auto_enabled && !row.eligibility.eligible}
+                <span class="note">not eligible yet</span>
+              {/if}
+            </td>
+            <td><PrCurveChart points={row.metrics.pr_curve} /></td>
           </tr>
         {/each}
       </tbody>
@@ -93,7 +150,8 @@
   }
   .note {
     color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
+    display: block;
   }
   .error-banner {
     color: var(--danger);

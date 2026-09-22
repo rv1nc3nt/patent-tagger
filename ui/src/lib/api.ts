@@ -51,6 +51,8 @@ export interface TagRow {
   hotkey: string | null;
   version: number;
   archived: boolean;
+  threshold: number | null;
+  auto_enabled: boolean;
 }
 
 export interface QueueEntry {
@@ -79,7 +81,8 @@ export interface TagScore {
   color: string | null;
   hotkey: string | null;
   score: number | null;
-  source: "zero_shot" | "knn" | null;
+  source: "blend" | "lr" | "knn" | "zero_shot" | null;
+  model_version: string;
   suggested: boolean;
 }
 
@@ -104,15 +107,21 @@ export function archiveTag(tagId: number): Promise<void> {
   return invoke("archive_tag", { tagId });
 }
 
-export function reviewQueue(): Promise<QueueEntry[]> {
-  return invoke("review_queue");
+export type QueueOrdering = "import" | "uncertain";
+
+export function reviewQueue(ordering: QueueOrdering = "import"): Promise<QueueEntry[]> {
+  return invoke("review_queue", { ordering });
 }
 
 export function documentDetail(docId: number): Promise<DocumentView | null> {
   return invoke("document_detail", { docId });
 }
 
-export function validateDocument(docId: number, checkedTagIds: number[]): Promise<void> {
+export interface ValidateResult {
+  auto_disabled_tags: string[];
+}
+
+export function validateDocument(docId: number, checkedTagIds: number[]): Promise<ValidateResult> {
   return invoke("validate_document", { docId, checkedTagIds });
 }
 
@@ -142,4 +151,23 @@ export function tagMetrics(): Promise<TagMetrics[]> {
 
 export function retrainNow(): Promise<number> {
   return invoke("retrain_now");
+}
+
+export interface Eligibility {
+  eligible: boolean;
+  n_pos: number;
+  n_evaluated: number;
+  calibrated_threshold: number | null;
+}
+
+export function tagEligibility(tagId: number): Promise<Eligibility> {
+  return invoke("tag_eligibility", { tagId });
+}
+
+export function enableAutomaticMode(tagId: number): Promise<TagRow> {
+  return invoke("enable_automatic_mode", { tagId });
+}
+
+export function disableAutomaticMode(tagId: number): Promise<void> {
+  return invoke("disable_automatic_mode", { tagId });
 }
