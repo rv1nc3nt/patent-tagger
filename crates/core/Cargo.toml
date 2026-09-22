@@ -9,4 +9,9 @@ name = "core_lib"
 path = "src/lib.rs"
 
 [dependencies]
+rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite_migration = "=2.5.0"
 thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3.27.0"
