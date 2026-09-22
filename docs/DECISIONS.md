@@ -54,6 +54,20 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 
 - `crates/core::storage`: one migration (`schema.sql`) creating the full section 4.2 schema, run through `rusqlite_migration`. FTS5 external-content tables (`documents_fts`, `fulltext_fts`) kept in sync via `INSERT`/`UPDATE`/`DELETE` triggers, tested directly (insert a document, update its title/abstract, confirm an FTS `MATCH` finds it).
 - `crates/core::number`: no `regex` dependency added (not named in SPEC) — the parser is hand-written char/byte scanning over a compact (separator-stripped) string, splitting a trailing `letter + digits` kind code from the numeric prefix. Unknown country codes (anything other than EP/US/WO) return `ParseOutcome::NeedsNormalisation` rather than failing, per the earlier parser-fallback-contract decision.
+## 2026-09-22 — M5 prequential window, threshold, and PR curve
+
+**Question:** Section 7.4 says "a rolling window of the last 300 validated documents" per tag, without saying whether that's 300 documents globally or 300 per tag, and doesn't fix a threshold for the headline precision/recall figures (only the PR curve is asked for explicitly) or say how densely to sample the curve.
+
+**Decision:** Per tag: the last 300 `predictions` rows for that `tag_id` (each corresponds to a validation event where the document carried that tag), joined to the matching human label. Headline precision/recall use threshold 0.5, matching section 7.5's own fallback ("or >= 0.5 if not yet calibrated") since no calibrated per-tag threshold exists until M6. The PR curve samples 21 fixed thresholds (0.00, 0.05, ..., 1.00) rather than deriving thresholds from observed score values, for simplicity and determinism.
+
+## 2026-09-22 — M5 blending supersedes M4's zero-shot cutoff
+
+**Decision:** `scoring::blend_scores` (section 7.3's actual fallback chain: blend when both LR and k-NN exist, else whichever one does, else zero-shot) replaces M4's simpler "zero-shot only below 3 positives, k-NN otherwise" rule in `review::score_document`. The two are consistent: zero-shot is still only ever passed into `blend_scores` as `Some` when `n_pos < ZERO_SHOT_POSITIVE_CEILING` (per 7.2), so the fallback chain naturally reduces to the old behaviour in that region and correctly returns no score at all when a tag is past that ceiling but neither LR (needs ≥5/≥5) nor k-NN is available yet.
+
+## 2026-09-22 — Found and fixed a real bug in the synthetic-data test's own PRNG
+
+While building the M5 acceptance test (LR outperforming k-NN on clustered synthetic data, per section 7's intro), the deterministic pseudo-random hash used to generate noise dimensions had `(h >> 40) as u32 as f32 / u32::MAX as f32` — `h >> 40` only leaves 24 significant bits, but dividing by `u32::MAX` assumes a 32-bit range, so every generated value landed within about 1/256th of `-1.0`, silently defeating the "noise" entirely (both scorers scored 100% regardless of sample size, which was itself the tell). Fixed to `h >> 32`. Verified by printing raw hash values at intermediate steps before and after the fix.
+
 ## 2026-09-22 — M4 scoring formulas and scope
 
 **Question:** Section 7.2 says the zero-shot score is "cosine similarity mapped through a fixed monotonic function" without naming the function.

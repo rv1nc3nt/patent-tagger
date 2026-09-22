@@ -23,6 +23,30 @@ pub fn zero_shot_score(doc_vector: &[f32], tag_vector: &[f32]) -> f32 {
     ((cosine_similarity(doc_vector, tag_vector) + 1.0) / 2.0).clamp(0.0, 1.0)
 }
 
+/// Combines whichever of LR/k-NN/zero-shot are available (SPEC 7.3):
+/// `w = n_pos / (n_pos + 20)`, `score = w*LR + (1-w)*kNN` when both exist;
+/// otherwise whichever single one exists; otherwise zero-shot, if it's
+/// even in play (it only is below [`ZERO_SHOT_POSITIVE_CEILING`] positives,
+/// per SPEC 7.2 - `zero_shot` should already be `None` above that, which
+/// callers get by only passing `Some` when `n_pos < ZERO_SHOT_POSITIVE_CEILING`).
+/// `None` when nothing is available at all.
+pub fn blend_scores(
+    lr: Option<f32>,
+    knn: Option<f32>,
+    zero_shot: Option<f32>,
+    n_pos: i64,
+) -> Option<(f32, &'static str)> {
+    match (lr, knn) {
+        (Some(lr), Some(knn)) => {
+            let w = n_pos as f32 / (n_pos as f32 + 20.0);
+            Some((w * lr + (1.0 - w) * knn, "blend"))
+        }
+        (Some(lr), None) => Some((lr, "lr")),
+        (None, Some(knn)) => Some((knn, "knn")),
+        (None, None) => zero_shot.map(|s| (s, "zero_shot")),
+    }
+}
+
 /// SPEC 7.2: take the k nearest validated documents by cosine similarity,
 /// keep only the ones with a human label for this tag, and return the
 /// similarity-weighted fraction of positives (negative similarities
@@ -68,6 +92,30 @@ pub fn knn_score(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blend_weights_lr_more_heavily_as_positives_grow() {
+        let (low_n, _) = blend_scores(Some(1.0), Some(0.0), None, 0).unwrap();
+        let (mid_n, _) = blend_scores(Some(1.0), Some(0.0), None, 20).unwrap();
+        let (high_n, _) = blend_scores(Some(1.0), Some(0.0), None, 1000).unwrap();
+        assert!(low_n < mid_n);
+        assert!(mid_n < high_n);
+        assert!((low_n - 0.0).abs() < 1e-6, "at n_pos=0, w=0, so score should be all k-NN");
+        assert!((mid_n - 0.5).abs() < 1e-6, "at n_pos=20, w=0.5 exactly");
+        assert!(high_n > 0.9, "at n_pos=1000, w should be close to 1 (mostly LR)");
+    }
+
+    #[test]
+    fn blend_falls_back_to_whichever_single_scorer_is_available() {
+        assert_eq!(blend_scores(Some(0.7), None, None, 10), Some((0.7, "lr")));
+        assert_eq!(blend_scores(None, Some(0.3), None, 10), Some((0.3, "knn")));
+    }
+
+    #[test]
+    fn blend_falls_back_to_zero_shot_only_when_nothing_else_is_available() {
+        assert_eq!(blend_scores(None, None, Some(0.6), 1), Some((0.6, "zero_shot")));
+        assert_eq!(blend_scores(None, None, None, 1), None);
+    }
 
     #[test]
     fn zero_shot_maps_identical_vectors_to_one() {
