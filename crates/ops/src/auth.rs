@@ -47,10 +47,12 @@ impl TokenCache {
     }
 
     /// Returns a valid access token, fetching or renewing it as needed.
+    /// `auth_url` is the full token-endpoint URL (not a base to append to —
+    /// it is a sibling of the REST services base, not nested under it).
     pub async fn get(
         &self,
         http: &reqwest::Client,
-        base_url: &str,
+        auth_url: &str,
         consumer_key: &str,
         consumer_secret: &str,
     ) -> Result<String, OpsError> {
@@ -60,7 +62,7 @@ impl TokenCache {
                 return Ok(token.access_token.clone());
             }
         }
-        let token = fetch_token(http, base_url, consumer_key, consumer_secret).await?;
+        let token = fetch_token(http, auth_url, consumer_key, consumer_secret).await?;
         let access_token = token.access_token.clone();
         *guard = Some(token);
         Ok(access_token)
@@ -69,12 +71,12 @@ impl TokenCache {
 
 async fn fetch_token(
     http: &reqwest::Client,
-    base_url: &str,
+    auth_url: &str,
     consumer_key: &str,
     consumer_secret: &str,
 ) -> Result<Token, OpsError> {
     let response = http
-        .post(format!("{base_url}/auth/accesstoken"))
+        .post(auth_url)
         .basic_auth(consumer_key, Some(consumer_secret))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials")

@@ -2388,6 +2388,7 @@ dependencies = [
  "anyhow",
  "directories",
  "log",
+ "patent-core",
  "serde",
  "serde_json",
  "tauri",
