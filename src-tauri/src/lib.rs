@@ -1,3 +1,4 @@
+mod automation;
 mod commands;
 mod db;
 mod import_worker;
@@ -29,6 +30,9 @@ pub fn run() {
       commands::skip_document,
       commands::retrain_now,
       commands::tag_metrics,
+      commands::enable_automatic_mode,
+      commands::disable_automatic_mode,
+      commands::tag_eligibility,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

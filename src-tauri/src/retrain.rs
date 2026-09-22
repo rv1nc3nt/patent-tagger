@@ -3,19 +3,23 @@
 //! here; the actual training math is `core_lib::classifier::train`.
 
 use core_lib::rusqlite::Connection;
-use core_lib::{classifier, embeddings, storage, tags};
+use core_lib::{classifier, embeddings, predictions, settings, storage, tags};
 use embed_lib::Embedder;
 
 const RETRAIN_EVERY_N_VALIDATIONS: i64 = 10;
 
 /// Retrains every active tag with enough data (SPEC 7.2: >= 5 positives
-/// and >= 5 negatives), unconditionally - callers decide when to call
-/// this (every 10 validations, or on demand).
+/// and >= 5 negatives) and recalibrates every active tag's threshold (SPEC
+/// 7.5) - both unconditional here; callers decide when to call this (every
+/// 10 validations, or on demand). Threshold recalibration doesn't need a
+/// trained classifier (it only needs prequential data), so it runs for
+/// every active tag regardless of whether LR training succeeded.
 pub fn retrain_eligible_tags(
     conn: &Connection,
     embedder: &impl Embedder,
     now: &str,
 ) -> Result<usize, storage::StorageError> {
+    let target_precision = settings::target_precision(conn)?;
     let mut retrained = 0;
     for tag in tags::list_active(conn)? {
         let samples = embeddings::training_samples_for_tag(conn, tag.id, embedder.model_id())?;
@@ -23,6 +27,9 @@ pub fn retrain_eligible_tags(
             classifier::store(conn, tag.id, embedder.model_id(), &trained, now)?;
             retrained += 1;
         }
+
+        let calibrated = predictions::calibrate_threshold(conn, tag.id, target_precision)?;
+        tags::set_threshold(conn, tag.id, calibrated)?;
     }
     Ok(retrained)
 }
@@ -40,8 +47,44 @@ pub fn is_scheduled_retrain_point(conn: &Connection) -> Result<bool, storage::St
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core_lib::{documents, labels};
+    use core_lib::{documents, labels, predictions};
     use std::collections::HashSet;
+
+    struct FakeEmbedder;
+    impl Embedder for FakeEmbedder {
+        fn model_id(&self) -> &str {
+            "fake-model@v1"
+        }
+        fn dim(&self) -> usize {
+            2
+        }
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, embed_lib::EmbedError> {
+            Ok(texts.iter().map(|_| vec![0.0, 0.0]).collect())
+        }
+    }
+
+    #[test]
+    fn retrain_recalibrates_thresholds_for_every_active_tag() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+        assert_eq!(tag.threshold, None, "no threshold before any prequential data exists");
+
+        // Cleanly separated scores so a threshold reaching the default
+        // 0.95 target precision is reachable.
+        for i in 0..5 {
+            let pub_key = format!("EPPOS{i:04}");
+            documents::insert_pending(&conn, &pub_key, &pub_key, "2026-01-01T00:00:00Z").unwrap();
+            let doc = documents::find_by_pub_key(&conn, &pub_key).unwrap().unwrap();
+            predictions::record(&conn, doc.id, tag_id, "fake-model@v1", 0.9, true, "2026-01-01T00:00:00Z").unwrap();
+            labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &[tag_id].into_iter().collect(), "2026-01-01T00:00:00Z").unwrap();
+        }
+
+        retrain_eligible_tags(&conn, &FakeEmbedder, "2026-01-02T00:00:00Z").unwrap();
+
+        let recalibrated = tags::get(&conn, tag_id).unwrap().unwrap();
+        assert!(recalibrated.threshold.is_some(), "threshold should now be calibrated");
+    }
 
     #[test]
     fn scheduled_retrain_point_is_every_tenth_validation() {

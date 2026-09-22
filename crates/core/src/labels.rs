@@ -145,6 +145,43 @@ pub fn positive_tag_ids(conn: &Connection, doc_id: i64) -> Result<HashSet<i64>, 
     Ok(rows)
 }
 
+/// Whether `(doc_id, tag_id)` already has a label at all, regardless of
+/// state or source - used to decide whether an automatic decision still
+/// needs to be made (SPEC 7.5), since a document only reaches this check
+/// while still in the review queue (never yet human-validated), so any
+/// existing label there can only be a prior automatic one.
+pub fn has_any_label(conn: &Connection, doc_id: i64, tag_id: i64) -> Result<bool, StorageError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM labels WHERE doc_id = ?1 AND tag_id = ?2)",
+        params![doc_id, tag_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n != 0)
+    .map_err(StorageError::from)
+}
+
+/// Tag IDs this document currently has an *automatic* label for - called
+/// right before `validate_document` overwrites them, to know which tags
+/// this validation is about to audit (SPEC 7.5).
+pub fn auto_labelled_tag_ids(conn: &Connection, doc_id: i64) -> Result<HashSet<i64>, StorageError> {
+    let mut stmt = conn.prepare("SELECT tag_id FROM labels WHERE doc_id = ?1 AND source = 'auto'")?;
+    let rows = stmt
+        .query_map(params![doc_id], |row| row.get::<_, i64>(0))?
+        .collect::<Result<HashSet<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Like [`positive_tag_ids`], but any source - an automatic `pos` decision
+/// (SPEC 7.5) is still a decision already on record, worth pre-checking in
+/// the Review screen just like a human one.
+pub fn all_positive_tag_ids(conn: &Connection, doc_id: i64) -> Result<HashSet<i64>, StorageError> {
+    let mut stmt = conn.prepare("SELECT tag_id FROM labels WHERE doc_id = ?1 AND state = 'pos'")?;
+    let rows = stmt
+        .query_map(params![doc_id], |row| row.get::<_, i64>(0))?
+        .collect::<Result<HashSet<_>, _>>()?;
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +213,34 @@ mod tests {
 
         let solar_labels = human_labels_for_tag(&conn, solar.id).unwrap();
         assert_eq!(solar_labels.get(&doc_id), Some(&LabelState::Neg));
+    }
+
+    #[test]
+    fn auto_labelled_tag_ids_reflects_only_automatic_labels() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+
+        write_automatic_label(&conn, doc_id, battery.id, 0.9, "model@v1", 1, NOW).unwrap();
+        let checked: HashSet<i64> = [solar.id].into_iter().collect();
+        validate_document(&conn, doc_id, std::slice::from_ref(&solar), &checked, NOW).unwrap();
+
+        let auto_tags = auto_labelled_tag_ids(&conn, doc_id).unwrap();
+        assert!(auto_tags.contains(&battery.id));
+        assert!(!auto_tags.contains(&solar.id), "solar was labelled by a human, not automatically");
+    }
+
+    #[test]
+    fn all_positive_tag_ids_includes_automatic_labels() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+
+        write_automatic_label(&conn, doc_id, battery.id, 0.9, "model@v1", 1, NOW).unwrap();
+        let checked: HashSet<i64> = [solar.id].into_iter().collect();
+        validate_document(&conn, doc_id, std::slice::from_ref(&solar), &checked, NOW).unwrap();
+
+        let positives = all_positive_tag_ids(&conn, doc_id).unwrap();
+        assert!(positives.contains(&battery.id), "the automatic label should be included");
+        assert!(positives.contains(&solar.id), "the human label should be included");
     }
 
     #[test]

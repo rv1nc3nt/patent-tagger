@@ -69,10 +69,19 @@ pub async fn run_import_jobs(
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    Ok(crate::import_worker::run(&state.conn, &client, &model.0, |outcome| {
+    let outcomes = crate::import_worker::run(&state.conn, &client, &model.0, |outcome| {
         let _ = app.emit("import-progress", outcome);
     })
-    .await)
+    .await;
+
+    // Newly fetched documents may already qualify for an automatic
+    // decision under a tag that's already in automatic mode (SPEC 7.5).
+    {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        crate::automation::apply_pending_automatic_labels(&conn, &model.0, &current_timestamp())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(outcomes)
 }
 
 /// Moves the failed job for `doc_id` back to pending (SPEC section 8's
@@ -180,10 +189,61 @@ pub fn archive_tag(state: State<Db>, tag_id: i64) -> Result<(), String> {
     tags::archive(&conn, tag_id).map_err(|e| e.to_string())
 }
 
+/// SPEC 7.5: "Automatic mode unavailable before eligibility" - refuses
+/// unless the tag currently meets the eligibility bar, in which case its
+/// threshold is set to the just-calibrated value and auto mode turns on.
 #[tauri::command]
-pub fn review_queue(state: State<Db>) -> Result<Vec<documents::QueueEntry>, String> {
+pub fn enable_automatic_mode(state: State<Db>, model: State<Model>, tag_id: i64) -> Result<TagRow, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    documents::list_queue(&conn).map_err(|e| e.to_string())
+    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    let eligibility =
+        core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision).map_err(|e| e.to_string())?;
+    if !eligibility.eligible {
+        return Err(format!(
+            "tag {tag_id} is not yet eligible for automatic mode (n_pos={}, n_evaluated={}, target precision {} {})",
+            eligibility.n_pos,
+            eligibility.n_evaluated,
+            target_precision,
+            if eligibility.calibrated_threshold.is_some() { "reachable" } else { "not reachable" },
+        ));
+    }
+    tags::set_threshold(&conn, tag_id, eligibility.calibrated_threshold).map_err(|e| e.to_string())?;
+    tags::set_auto_enabled(&conn, tag_id, true).map_err(|e| e.to_string())?;
+
+    crate::automation::apply_pending_automatic_labels(&conn, &model.0, &current_timestamp())
+        .map_err(|e| e.to_string())?;
+
+    tags::get(&conn, tag_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("tag {tag_id} not found"))
+}
+
+#[tauri::command]
+pub fn disable_automatic_mode(state: State<Db>, tag_id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    tags::set_auto_enabled(&conn, tag_id, false).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn tag_eligibility(state: State<Db>, tag_id: i64) -> Result<core_lib::predictions::Eligibility, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision).map_err(|e| e.to_string())
+}
+
+/// `ordering`: `"import"` (default, `documents::list_queue`'s own order)
+/// or `"uncertain"` (SPEC section 8's "most uncertain first").
+#[tauri::command]
+pub fn review_queue(
+    state: State<Db>,
+    model: State<Model>,
+    ordering: Option<String>,
+) -> Result<Vec<documents::QueueEntry>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    match ordering.as_deref() {
+        Some("uncertain") => crate::review::queue_ordered_by_uncertainty(&conn, &model.0).map_err(|e| e.to_string()),
+        _ => documents::list_queue(&conn).map_err(|e| e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -194,6 +254,14 @@ pub fn document_detail(
 ) -> Result<Option<crate::review::DocumentView>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     crate::review::document_view(&conn, &model.0, doc_id).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ValidateResult {
+    /// Names of tags whose automatic mode was just disabled (SPEC 7.5's
+    /// audit safeguard) because of this validation - the frontend shows
+    /// this as a notice ("the user is notified").
+    pub auto_disabled_tags: Vec<String>,
 }
 
 /// Validates a document: every active tag gets a human `pos`/`neg` label
@@ -209,10 +277,15 @@ pub fn validate_document(
     model: State<Model>,
     doc_id: i64,
     checked_tag_ids: Vec<i64>,
-) -> Result<(), String> {
+) -> Result<ValidateResult, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = current_timestamp();
     let active_tags = tags::list_active(&conn).map_err(|e| e.to_string())?;
+
+    // Tags with an existing automatic decision on this document - once the
+    // human's decision lands in label_history right below it, these are
+    // the ones that just became "audited" (SPEC 7.5).
+    let previously_auto = labels::auto_labelled_tag_ids(&conn, doc_id).map_err(|e| e.to_string())?;
 
     let scores = crate::review::score_document(&conn, &model.0, &active_tags, doc_id).map_err(|e| e.to_string())?;
     for tag_score in &scores {
@@ -233,10 +306,23 @@ pub fn validate_document(
     let checked: HashSet<i64> = checked_tag_ids.into_iter().collect();
     labels::validate_document(&conn, doc_id, &active_tags, &checked, &now).map_err(|e| e.to_string())?;
 
+    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    let mut auto_disabled_tags = Vec::new();
+    for tag in &active_tags {
+        if previously_auto.contains(&tag.id)
+            && crate::automation::check_and_disable_if_below_target(&conn, tag.id, target_precision)
+                .map_err(|e| e.to_string())?
+        {
+            auto_disabled_tags.push(tag.name.clone());
+        }
+    }
+
     if crate::retrain::is_scheduled_retrain_point(&conn).map_err(|e| e.to_string())? {
         crate::retrain::retrain_eligible_tags(&conn, &model.0, &now).map_err(|e| e.to_string())?;
+        crate::automation::apply_pending_automatic_labels(&conn, &model.0, &now).map_err(|e| e.to_string())?;
     }
-    Ok(())
+
+    Ok(ValidateResult { auto_disabled_tags })
 }
 
 #[tauri::command]

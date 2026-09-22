@@ -20,14 +20,53 @@ pub struct TagScore {
     /// the classifier's training timestamp (SPEC 7.3's `model_version`),
     /// recorded alongside the score in `predictions` at validation time.
     pub model_version: String,
-    /// Pre-checked in the UI: an existing human `pos` label, or a score at
-    /// /above 0.5 from any source *except* zero-shot (SPEC 7.5's fallback
-    /// threshold - no calibrated per-tag threshold until M6 - and 7.2:
-    /// zero-shot suggestions are "shown as weak" and "never pre-checked").
+    /// Pre-checked in the UI: an existing `pos` label (human or automatic -
+    /// either represents a decision already made, worth showing as such),
+    /// or a score at/above the tag's calibrated threshold (SPEC 7.5, 0.5
+    /// if not yet calibrated) from any source *except* zero-shot (SPEC
+    /// 7.2: zero-shot suggestions are "shown as weak" and "never
+    /// pre-checked").
     pub suggested: bool,
 }
 
-const DEFAULT_SUGGESTION_THRESHOLD: f32 = 0.5;
+/// One tag's blended score for one document's embedding (SPEC 7.3). Pulled
+/// out of `score_document` so automatic-label application (`automation.rs`)
+/// can reuse the exact same scoring path instead of a parallel copy.
+pub fn score_one_tag(
+    conn: &Connection,
+    embedder: &impl Embedder,
+    tag: &TagRow,
+    doc_vector: &[f32],
+    validated_neighbours: &mut Option<Vec<(i64, Vec<f32>)>>,
+) -> Result<(Option<f32>, Option<&'static str>, String), storage::StorageError> {
+    let n_pos = core_lib::tags::count_human_positives(conn, tag.id)?;
+
+    let zero_shot = if n_pos < scoring::ZERO_SHOT_POSITIVE_CEILING {
+        embeddings::get_tag_embedding(conn, tag.id, embedder.model_id(), tag.version)?
+            .map(|tag_vector| scoring::zero_shot_score(doc_vector, &tag_vector))
+    } else {
+        None
+    };
+
+    let neighbours = validated_neighbours.get_or_insert_with(|| {
+        embeddings::list_validated_document_embeddings(conn, embedder.model_id()).unwrap_or_default()
+    });
+    let labels_for_tag = labels::human_labels_for_tag(conn, tag.id)?;
+    let knn = scoring::knn_score(doc_vector, neighbours, &labels_for_tag);
+
+    let trained_classifier = classifier::load(conn, tag.id, embedder.model_id())?;
+    let lr = trained_classifier.as_ref().map(|c| c.predict(doc_vector));
+
+    let model_version = match trained_classifier.as_ref().and_then(|c| c.trained_at.as_deref()) {
+        Some(trained_at) => format!("{}+lr@{trained_at}", embedder.model_id()),
+        None => embedder.model_id().to_string(),
+    };
+
+    match scoring::blend_scores(lr, knn, zero_shot, n_pos) {
+        Some((score, source)) => Ok((Some(score), Some(source), model_version)),
+        None => Ok((None, None, model_version)),
+    }
+}
 
 pub fn score_document(
     conn: &Connection,
@@ -36,50 +75,22 @@ pub fn score_document(
     doc_id: i64,
 ) -> Result<Vec<TagScore>, storage::StorageError> {
     let doc_vector = embeddings::get_document_embedding(conn, doc_id, embedder.model_id())?;
-    let already_positive = labels::positive_tag_ids(conn, doc_id)?;
+    // Any existing pos label (human or automatic) - either represents a
+    // decision already on record, worth pre-checking in the UI.
+    let already_positive = labels::all_positive_tag_ids(conn, doc_id)?;
 
-    // Computed lazily and only once, since k-NN's candidate pool doesn't
-    // depend on the tag.
     let mut validated_neighbours = None;
 
     let mut scores = Vec::with_capacity(active_tags.len());
     for tag in active_tags {
         let (score, source, model_version) = match &doc_vector {
             None => (None, None, embedder.model_id().to_string()),
-            Some(doc_vector) => {
-                let n_pos = core_lib::tags::count_human_positives(conn, tag.id)?;
-
-                let zero_shot = if n_pos < scoring::ZERO_SHOT_POSITIVE_CEILING {
-                    embeddings::get_tag_embedding(conn, tag.id, embedder.model_id(), tag.version)?
-                        .map(|tag_vector| scoring::zero_shot_score(doc_vector, &tag_vector))
-                } else {
-                    None
-                };
-
-                let neighbours = validated_neighbours.get_or_insert_with(|| {
-                    embeddings::list_validated_document_embeddings(conn, embedder.model_id())
-                        .unwrap_or_default()
-                });
-                let labels_for_tag = labels::human_labels_for_tag(conn, tag.id)?;
-                let knn = scoring::knn_score(doc_vector, neighbours, &labels_for_tag);
-
-                let trained_classifier = classifier::load(conn, tag.id, embedder.model_id())?;
-                let lr = trained_classifier.as_ref().map(|c| c.predict(doc_vector));
-
-                let model_version = match trained_classifier.as_ref().and_then(|c| c.trained_at.as_deref()) {
-                    Some(trained_at) => format!("{}+lr@{trained_at}", embedder.model_id()),
-                    None => embedder.model_id().to_string(),
-                };
-
-                match scoring::blend_scores(lr, knn, zero_shot, n_pos) {
-                    Some((score, source)) => (Some(score), Some(source), model_version),
-                    None => (None, None, model_version),
-                }
-            }
+            Some(doc_vector) => score_one_tag(conn, embedder, tag, doc_vector, &mut validated_neighbours)?,
         };
 
+        let effective_threshold = tag.threshold.unwrap_or(0.5);
         let suggested = already_positive.contains(&tag.id)
-            || (source != Some("zero_shot") && score.is_some_and(|s| s >= DEFAULT_SUGGESTION_THRESHOLD));
+            || (source != Some("zero_shot") && score.is_some_and(|s| s >= effective_threshold));
 
         scores.push(TagScore {
             tag_id: tag.id,
@@ -114,4 +125,37 @@ pub fn document_view(
     let active_tags = core_lib::tags::list_active(conn)?;
     let tags = score_document(conn, embedder, &active_tags, doc_id)?;
     Ok(Some(DocumentView { detail, tags }))
+}
+
+/// SPEC section 8: the queue can be ordered by import order (the default,
+/// `documents::list_queue`'s own order) or "most uncertain first (scores
+/// closest to their thresholds)" - now meaningful once M6 gives every tag
+/// a real calibrated threshold to be close to, rather than the constant
+/// 0.5 stand-in M4 deferred this behind.
+///
+/// A document's "uncertainty" is the smallest `|score - threshold|` across
+/// its tags with a defined score (the single most undecided tag drives
+/// whether a human needs to look at it at all); documents with no scored
+/// tags yet sort last, after everything with a real signal.
+pub fn queue_ordered_by_uncertainty(
+    conn: &Connection,
+    embedder: &impl Embedder,
+) -> Result<Vec<documents::QueueEntry>, storage::StorageError> {
+    let active_tags = core_lib::tags::list_active(conn)?;
+    let mut entries = documents::list_queue(conn)?;
+
+    let mut distances = Vec::with_capacity(entries.len());
+    for entry in &entries {
+        let scores = score_document(conn, embedder, &active_tags, entry.id)?;
+        let distance = scores
+            .iter()
+            .filter_map(|s| s.score.map(|score| (score - active_tags.iter().find(|t| t.id == s.tag_id).and_then(|t| t.threshold).unwrap_or(0.5)).abs()))
+            .fold(f32::INFINITY, f32::min);
+        distances.push(distance);
+    }
+
+    let mut indices: Vec<usize> = (0..entries.len()).collect();
+    indices.sort_by(|&a, &b| distances[a].total_cmp(&distances[b]));
+    entries = indices.into_iter().map(|i| entries[i].clone()).collect();
+    Ok(entries)
 }
