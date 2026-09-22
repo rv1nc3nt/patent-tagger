@@ -54,6 +54,20 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 
 - `crates/core::storage`: one migration (`schema.sql`) creating the full section 4.2 schema, run through `rusqlite_migration`. FTS5 external-content tables (`documents_fts`, `fulltext_fts`) kept in sync via `INSERT`/`UPDATE`/`DELETE` triggers, tested directly (insert a document, update its title/abstract, confirm an FTS `MATCH` finds it).
 - `crates/core::number`: no `regex` dependency added (not named in SPEC) — the parser is hand-written char/byte scanning over a compact (separator-stripped) string, splitting a trailing `letter + digits` kind code from the numeric prefix. Unknown country codes (anything other than EP/US/WO) return `ParseOutcome::NeedsNormalisation` rather than failing, per the earlier parser-fallback-contract decision.
+## 2026-09-22 — M4 scoring formulas and scope
+
+**Question:** Section 7.2 says the zero-shot score is "cosine similarity mapped through a fixed monotonic function" without naming the function.
+
+**Decision:** `(cosine + 1) / 2`, clamped to `[0, 1]` — the simplest monotonic map from cosine similarity's `[-1, 1]` range onto a `[0, 1]` score. `crates/core::scoring::zero_shot_score`.
+
+**Question:** M4's milestone bullet is "Review screen, labels, zero-shot and k-NN suggestions" with no LR/blending (that's M5). What score does the Review screen show when a tag has ≥3 positives (past zero-shot's cutoff) but k-NN is also undefined (fewer than 10 validated documents exist yet, or none of the k nearest have a label for that tag)?
+
+**Decision:** No score at all — the tag shows unchecked with no score bar, which is the correct degenerate case rather than something to paper over with a fallback SPEC doesn't ask for. Once ≥3 positives, zero-shot stops being used entirely (per SPEC's own wording: "used only while a tag has fewer than 3 positives"); it isn't a fallback for k-NN.
+
+**Question:** Which documents appear in the M4 review queue?
+
+**Decision:** Only `review_state = "queued"` documents with `fetch_status = "fetched"` (i.e., they have both a title and abstract, and therefore an embedding). Documents with `no_english_abstract` need a manually-pasted abstract before they can be embedded/tagged at all (SPEC 5.3 step 4) — that manual-paste UI isn't part of M4's stated scope, so those documents simply don't appear in the queue yet rather than appearing un-tagged.
+
 ## 2026-09-22 — M3 acceptance verified: parity test passes, throughput measured
 
 **Result:** `cargo test -p patent-embed --features parity` passes: all 10 committed reference cases (real `sentence-transformers` output for `BAAI/bge-small-en-v1.5` at the pinned revision) match the Rust/candle implementation at cosine similarity ≥ 0.999. Confirmed the model's own `1_Pooling/config.json` specifies `pooling_mode_cls_token: true` (matching SPEC section 6 and our implementation), not mean pooling.
