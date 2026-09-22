@@ -22,6 +22,7 @@
   const noEnglishAbstract = $derived(outcomes.filter((o) => o.status === "no_english_abstract"));
   const notFound = $derived(outcomes.filter((o) => o.status === "not_found"));
   const errors = $derived(outcomes.filter((o) => o.status === "error"));
+  const failed = $derived([...notFound, ...errors]);
   const related = $derived(
     Array.from(new Set(outcomes.flatMap((o) => o.related_pub_keys))).filter(
       (pubKey) => !outcomes.some((o) => o.pub_key === pubKey),
@@ -123,18 +124,19 @@
       {@render section("Duplicates", report.duplicates)}
       {@render section("Related documents", related)}
       {@render section("No English abstract", noEnglishAbstract.map((o) => o.pub_key))}
-      {@render section("Not found", notFound.map((o) => o.pub_key))}
       {@render section("Needs manual number lookup", report.needs_normalisation)}
       {@render section("Could not parse", report.unparseable)}
 
-      {#if errors.length > 0 || notFound.length > 0}
+      {#if failed.length > 0}
         <div class="section">
-          <h3>Errors</h3>
+          <h3>Not found / errors ({failed.length})</h3>
           <ul>
-            {#each errors as outcome (outcome.doc_id)}
+            {#each failed as outcome (outcome.doc_id)}
               <li>
                 <span class="pub-key">{outcome.pub_key}</span>
-                <span class="detail">{outcome.error}</span>
+                <span class="detail">
+                  {outcome.status === "not_found" ? "Not found" : outcome.error}
+                </span>
                 <button class="retry" onclick={() => handleRetry(outcome.doc_id)} disabled={isBusy}>
                   Retry
                 </button>
