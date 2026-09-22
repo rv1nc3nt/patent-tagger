@@ -360,7 +360,7 @@ pub fn tag_metrics(state: State<Db>) -> Result<Vec<TagMetricsRow>, String> {
         .collect()
 }
 
-fn current_timestamp() -> String {
+pub(crate) fn current_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)

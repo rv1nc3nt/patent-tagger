@@ -3,10 +3,12 @@ mod backup;
 mod commands;
 mod db;
 mod import_worker;
+mod library;
 mod model;
 mod platform;
 mod retrain;
 mod review;
+mod settings;
 
 use tauri::Manager;
 
@@ -34,6 +36,19 @@ pub fn run() {
       commands::enable_automatic_mode,
       commands::disable_automatic_mode,
       commands::tag_eligibility,
+      settings::get_settings,
+      settings::update_settings,
+      settings::data_directory,
+      settings::create_backup,
+      settings::restore_backup,
+      settings::export_tag_schema,
+      settings::import_tag_schema,
+      library::library_search,
+      library::similar_documents,
+      library::export_csv,
+      library::export_json,
+      library::export_tag_list,
+      library::export_documents,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
