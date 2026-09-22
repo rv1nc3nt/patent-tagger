@@ -55,13 +55,19 @@ pub async fn test_ops_connection(state: State<'_, Db>) -> Result<String, String>
 
 #[tauri::command]
 pub async fn run_import_jobs(
+    app: tauri::AppHandle,
     state: State<'_, Db>,
 ) -> Result<Vec<crate::import_worker::DocumentOutcome>, String> {
+    use tauri::Emitter;
+
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    Ok(crate::import_worker::run(&state.conn, &client).await)
+    Ok(crate::import_worker::run(&state.conn, &client, |outcome| {
+        let _ = app.emit("import-progress", outcome);
+    })
+    .await)
 }
 
 /// Moves the failed job for `doc_id` back to pending (SPEC section 8's

@@ -28,11 +28,18 @@ pub struct DocumentOutcome {
     pub related_pub_keys: Vec<String>,
 }
 
-/// Processes every resumable `import_document` job once. Safe to call
-/// repeatedly (e.g. after a previous run was interrupted, or to pick up
-/// jobs a retry moved back to pending): jobs left in `running` from an
-/// earlier, incomplete pass are picked up again, per SPEC 5.4.
-pub async fn run(conn_mutex: &std::sync::Mutex<Connection>, client: &OpsClient) -> Vec<DocumentOutcome> {
+/// Processes every resumable `import_document` job once, calling
+/// `on_progress` after each one (for the Import screen's progress display -
+/// SPEC section 8) - so it's usable both from the real app (which emits a
+/// Tauri event) and from tests (which can just collect into a `Vec`, or
+/// pass `|_| {}` to ignore it). Safe to call repeatedly: jobs left in
+/// `running` from an earlier, incomplete pass are picked up again, per
+/// SPEC 5.4.
+pub async fn run(
+    conn_mutex: &std::sync::Mutex<Connection>,
+    client: &OpsClient,
+    mut on_progress: impl FnMut(&DocumentOutcome),
+) -> Vec<DocumentOutcome> {
     let pending = {
         let conn = conn_mutex.lock().expect("db mutex poisoned");
         jobs::list_resumable(&conn, "import_document").unwrap_or_default()
@@ -53,19 +60,23 @@ pub async fn run(conn_mutex: &std::sync::Mutex<Connection>, client: &OpsClient) 
                 let conn = conn_mutex.lock().expect("db mutex poisoned");
                 let message = format!("bad job payload: {e}");
                 let _ = jobs::mark_failed(&conn, job.id, &message, &now);
-                results.push(DocumentOutcome {
+                let outcome = DocumentOutcome {
                     doc_id: -1,
                     pub_key: String::new(),
                     status: "error".to_string(),
                     title: None,
                     error: Some(message),
                     related_pub_keys: vec![],
-                });
+                };
+                on_progress(&outcome);
+                results.push(outcome);
                 continue;
             }
         };
 
-        results.push(process_one(conn_mutex, client, &job, &payload, &now).await);
+        let outcome = process_one(conn_mutex, client, &job, &payload, &now).await;
+        on_progress(&outcome);
+        results.push(outcome);
     }
 
     results
