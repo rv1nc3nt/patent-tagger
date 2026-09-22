@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE, not a recorded live response. Modeled on the verified
+  real schema of ep1000000_a1_biblio_abstract.xml, hand-edited to represent
+  a publication with no English title/abstract at all (only fr/de), the
+  case section 5.4 asks for: "EP A1 in French or German with an English
+  family member". A live example of this specific combination could not be
+  located without OPS search (out of scope per SPEC section 11); pair with
+  synthetic_family_with_english_wo_member.xml for the fallback lookup.
+-->
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <exchange-documents>
+        <exchange-document system="ops.epo.org" family-id="55555555" country="EP" doc-number="2500000" kind="A1">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>EP</country>
+                        <doc-number>2500000</doc-number>
+                        <kind>A1</kind>
+                        <date>20120912</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>EP2500000</doc-number>
+                        <date>20120912</date>
+                    </document-id>
+                </publication-reference>
+                <classifications-ipcr>
+                    <classification-ipcr sequence="1">
+                        <text>G06F   17/    30            A I                    </text>
+                    </classification-ipcr>
+                </classifications-ipcr>
+                <application-reference doc-id="12345678">
+                    <document-id document-id-type="docdb">
+                        <country>EP</country>
+                        <doc-number>11150001</doc-number>
+                        <kind>A</kind>
+                        <date>20110103</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>EP20110150001</doc-number>
+                        <date>20110103</date>
+                    </document-id>
+                </application-reference>
+                <parties>
+                    <applicants>
+                        <applicant sequence="1" data-format="epodoc">
+                            <applicant-name>
+                                <name>MUSTERFIRMA GMBH [DE]</name>
+                            </applicant-name>
+                        </applicant>
+                    </applicants>
+                </parties>
+                <invention-title lang="de">Vorrichtung zur Datenverarbeitung</invention-title>
+                <invention-title lang="fr">Dispositif de traitement de donn&#233;es</invention-title>
+            </bibliographic-data>
+            <abstract lang="de">
+                <p>Die Erfindung betrifft eine Vorrichtung zur Datenverarbeitung mit einem Prozessor und einem Speicher.</p>
+            </abstract>
+        </exchange-document>
+    </exchange-documents>
+</ops:world-patent-data>

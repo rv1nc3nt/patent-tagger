@@ -67,6 +67,22 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 - Images/fulltext: `/published-data/publication/{format}/{number}/images` and `.../fulltext`.
 - Throttling header `X-Throttling-Control`, format `idle (retrieval=green:200, search=yellow:20, inpadoc=red:30, images=green:200, other=green:1000)` — overall state (idle/busy/overloaded) then per-category `colour:limit`. No SPEC deviation found; exact quota-header names (vs. throttling) to be confirmed against a real authenticated response once credentials are available.
 
+## 2026-09-22 — OPS fixtures: 5 real, 3 synthetic
+
+**Question:** Section 5.4 requires fixture tests for EP A1 w/ English abstract, EP B1 w/o abstract, EP A1 FR/DE w/ English family member, US grant, US pre-grant, WO, not found. SPEC section 11 puts OPS search (CQL) out of scope, so there's no way to look up specific documents matching an exact edge case — only direct-by-number lookup.
+
+**Decision:** Recorded 5 real live responses (with the user's real credentials, against `tests/fixtures/ops/`): EP1000000 A1 (the EPO's own "1 millionth patent" milestone, trilingual, English abstract), EP1000000 B1 (same family — turned out to also carry an English abstract, so it doesn't demonstrate the "no abstract" case despite being real), its family listing (5 members: EP A1/B1, AT T1, NL C2, US A), US5960411 (Amazon's "1-Click" patent, pre-2001 grant, kind `A`), US6285999 B1 (Google's PageRank patent), WO2019123456 A1 (found to be real by chance), and a genuine 404 fault (`EP.9999999.Z9`).
+
+Could not locate real examples of "EP B1 with literally no abstract" or "EP A1 with only FR/DE, no English anywhere, with an English family member" without search — built 3 clearly-labeled synthetic fixtures (`synthetic_*.xml`, XML-commented as such) instead, hand-edited to match the verified real schema exactly (same element/attribute names, same structure) rather than guessed.
+
+**Also learned along the way:**
+- OPS error bodies are not always `<error>...</error>` — a 404 comes back as `<fault xmlns="http://ops.epo.org"><code>SERVER.EntityNotFound</code><message>No results found</message></fault>`. `error::from_error_body`'s namespace-agnostic `has_tag_name("message")` search happens to handle both shapes without changes (verified against the real fault body).
+- `exchange-document` carries `country`/`doc-number`/`kind`/`family-id` as attributes directly, redundant with (and simpler than) the nested `publication-reference/document-id[@document-id-type='docdb']`.
+- `invention-title` has no separate "title" wrapper — one element per language, direct child of `bibliographic-data`.
+- `abstract` is a sibling of `bibliographic-data` inside `exchange-document`, not nested under it.
+- The real EP1000000 A1 abstract's first paragraph starts with a `[0001]` numbering prefix, which is normally a description-only convention — abstract text is stored as-is (not stripped), since SPEC section 5.5 (full text) is the only place paragraph-number handling is specified, not abstracts.
+- roxmltree's `Node::has_tag_name("foo")` compares local name only, ignoring the document's namespace — confirmed empirically against both the `http://www.epo.org/exchange`-namespaced biblio documents and the `http://ops.epo.org`-namespaced fault document.
+
 ## 2026-09-22 — M2 credentials scope
 
 **Question:** M2's acceptance needs real OPS credentials (live 20-document import, fixture recording), but the full Settings screen is M7.

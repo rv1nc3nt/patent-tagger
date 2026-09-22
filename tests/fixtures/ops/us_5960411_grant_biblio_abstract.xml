@@ -1,0 +1,659 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="../../../../../style/exchange.xsl"?>
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <exchange-documents>
+        <exchange-document system="ops.epo.org" family-id="25457073" country="US" doc-number="5960411" kind="A">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>US</country>
+                        <doc-number>5960411</doc-number>
+                        <kind>A</kind>
+                        <date>19990928</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>US5960411</doc-number>
+                        <date>19990928</date>
+                    </document-id>
+                </publication-reference>
+                <classification-ipc>
+                    <text>G06F17/60</text>
+                </classification-ipc>
+                <classifications-ipcr>
+                    <classification-ipcr sequence="1">
+                        <text>G06Q  10/    08            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="2">
+                        <text>G06Q  20/    04            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="3">
+                        <text>G06Q  20/    12            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="4">
+                        <text>G06Q  30/    04            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="5">
+                        <text>G06Q  30/    06            A I                    </text>
+                    </classification-ipcr>
+                </classifications-ipcr>
+                <patent-classifications>
+                    <patent-classification sequence="1">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>10</main-group>
+                        <subgroup>083</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="2">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>10</main-group>
+                        <subgroup>087</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="3">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>20</main-group>
+                        <subgroup>04</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="4">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>20</main-group>
+                        <subgroup>04</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="5">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>20</main-group>
+                        <subgroup>12</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="6">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>20</main-group>
+                        <subgroup>12</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="7">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>04</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="8">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>04</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="9">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>06</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="10">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>06</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="11">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0605</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="12">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0605</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="13">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0633</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="14">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0633</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="15">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0635</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="16">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0635</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="17">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0641</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="18">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>Q</subclass>
+                        <main-group>30</main-group>
+                        <subgroup>0641</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="19">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>07</class>
+                        <subclass>F</subclass>
+                        <main-group>9</main-group>
+                        <subgroup>002</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="20">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>07</class>
+                        <subclass>F</subclass>
+                        <main-group>9</main-group>
+                        <subgroup>002</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="21">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>Y</section>
+                        <class>10</class>
+                        <subclass>S</subclass>
+                        <main-group>715</main-group>
+                        <subgroup>962</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="1">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>705/26.8</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="2">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>705/26.81</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="3">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>715/962</classification-symbol>
+                    </patent-classification>
+                </patent-classifications>
+                <application-reference doc-id="54191991">
+                    <document-id document-id-type="docdb">
+                        <country>US</country>
+                        <doc-number>92895197</doc-number>
+                        <kind>A</kind>
+                        <date>19970912</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>US19970928951</doc-number>
+                        <date>19970912</date>
+                    </document-id>
+                    <document-id document-id-type="original">
+                        <doc-number>928951</doc-number>
+                    </document-id>
+                </application-reference>
+                <priority-claims>
+                    <priority-claim sequence="1" kind="national">
+                        <document-id document-id-type="docdb">
+                            <country>US</country>
+                            <doc-number>92895197</doc-number>
+                            <kind>A</kind>
+                            <date>19970912</date>
+                        </document-id>
+                        <document-id document-id-type="epodoc">
+                            <doc-number>US19970928951</doc-number>
+                            <date>19970912</date>
+                        </document-id>
+                    </priority-claim>
+                </priority-claims>
+                <parties>
+                    <applicants>
+                        <applicant sequence="1" data-format="epodoc">
+                            <applicant-name>
+                                <name>AMAZON COM INC [US]</name>
+                            </applicant-name>
+                        </applicant>
+                        <applicant sequence="1" data-format="original">
+                            <applicant-name>
+                                <name>AMAZON.COM, INC.</name>
+                            </applicant-name>
+                        </applicant>
+                    </applicants>
+                    <inventors>
+                        <inventor sequence="1" data-format="epodoc">
+                            <inventor-name>
+                                <name>HARTMAN PERI [US]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="2" data-format="epodoc">
+                            <inventor-name>
+                                <name>BEZOS JEFFREY P [US]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="3" data-format="epodoc">
+                            <inventor-name>
+                                <name>KAPHAN SHEL [US]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="4" data-format="epodoc">
+                            <inventor-name>
+                                <name>SPIEGEL JOEL [US]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="1" data-format="original">
+                            <inventor-name>
+                                <name>HARTMAN</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="2" data-format="original">
+                            <inventor-name>
+                                <name> PERI</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="3" data-format="original">
+                            <inventor-name>
+                                <name>BEZOS</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="4" data-format="original">
+                            <inventor-name>
+                                <name> JEFFREY P.</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="5" data-format="original">
+                            <inventor-name>
+                                <name>KAPHAN</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="6" data-format="original">
+                            <inventor-name>
+                                <name> SHEL</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="7" data-format="original">
+                            <inventor-name>
+                                <name>SPIEGEL</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="8" data-format="original">
+                            <inventor-name>
+                                <name> JOEL</name>
+                            </inventor-name>
+                        </inventor>
+                    </inventors>
+                </parties>
+                <invention-title lang="en">Method and system for placing a purchase order via a communications network</invention-title>
+                <references-cited>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="1">
+                        <patcit dnum-type="publication number" num="1">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US4937863</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>4937863</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="2">
+                        <patcit dnum-type="publication number" num="2">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5204897</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5204897</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="3">
+                        <patcit dnum-type="publication number" num="3">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5260999</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5260999</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="4">
+                        <patcit dnum-type="publication number" num="4">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5627940</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5627940</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="5">
+                        <patcit dnum-type="publication number" num="5">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5640501</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5640501</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="6">
+                        <patcit dnum-type="publication number" num="6">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5640577</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5640577</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="7">
+                        <patcit dnum-type="publication number" num="7">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5664111</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5664111</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="8">
+                        <patcit dnum-type="publication number" num="8">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5715314</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5715314</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="9">
+                        <patcit dnum-type="publication number" num="9">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5715399</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5715399</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="10">
+                        <patcit dnum-type="publication number" num="10">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5727163</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5727163</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="11">
+                        <patcit dnum-type="publication number" num="11">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5745681</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5745681</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="12">
+                        <patcit dnum-type="publication number" num="12">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5758126</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5758126</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="13">
+                        <patcit dnum-type="publication number" num="13">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>EP0855687</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>EP</country>
+                                <doc-number>0855687</doc-number>
+                                <kind>A2</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="14">
+                        <patcit dnum-type="publication number" num="14">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>EP0855659</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>EP</country>
+                                <doc-number>0855659</doc-number>
+                                <kind>A1</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="15">
+                        <patcit dnum-type="publication number" num="15">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>EP0845747</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>EP</country>
+                                <doc-number>0845747</doc-number>
+                                <kind>A2</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="16">
+                        <patcit dnum-type="publication number" num="16">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>EP0883076</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>EP</country>
+                                <doc-number>0883076</doc-number>
+                                <kind>A2</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="17">
+                        <patcit dnum-type="publication number" num="17">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>WO9530961</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>WO</country>
+                                <doc-number>9530961</doc-number>
+                                <kind>A1</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="18">
+                        <patcit dnum-type="publication number" num="18">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>WO9638799</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>WO</country>
+                                <doc-number>9638799</doc-number>
+                                <kind>A1</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="19">
+                        <patcit dnum-type="publication number" num="19">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>WO9821679</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>WO</country>
+                                <doc-number>9821679</doc-number>
+                                <kind>A1</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="20">
+                        <nplcit num="1">
+                            <text>- Jones, Chris. Java Shopping Cart and Java Wallet; Oracles plans to join e commerce initiative. Mar. 31, 1997, InfoWorld Media Group.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="21">
+                        <nplcit num="2">
+                            <text>- Pacific Coast Software Software creates virtual shopping cart. Sep. 6, 1996. M2 Communications Ltd 1996.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="22">
+                        <nplcit num="3">
+                            <text>- Software Creates Virtual Shopping Cart. Sep. 5, 1996. Business Wire, Inc.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="23">
+                        <nplcit num="4">
+                            <text>- Terdoslavich, William. Java Electronic Commerce Framework. Computer Reseller News, Sep. 23, 1996, CMP Media, Inc., 1996, pp. 126, http://www.elibrary.com/id/101/101/getdoc . . . rydocid 902269 library d&amp;dtype 0 0&amp;dinst . Accessed Nov. 19, 1998 .</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="24">
+                        <nplcit num="5">
+                            <text>- Internet Access: Disc Distributing Announces Interactive World Wide. Cambridge Work Group Computing Report, Cambridge Publishing, Inc., 1995, http://www.elibrary.com/id/101/101/getdoc . . . docid 1007497 library a&amp;dtype 0 0&amp;dinst 0. Accessed Nov. 19, 1998 .</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="25">
+                        <nplcit num="6">
+                            <text>- Nance, Barry, Reviews: A Grand Opening for Virtual Storefront With Middleware. Jun. 1, 1997, CMP Media, Inc. 1997, p. 80, http://www.elibrary.com/getdoc.egi id 117 . . . docid 1257247 library a&amp;dtype 0 0&amp;dinst 0. Accessed Nov. 19, 1998 .</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="26">
+                        <nplcit num="7">
+                            <text>- Go Cart Shopping Cart Software Features. 1996 GO International, Inc. http://www.go cart.com/features.html. Accessed Nov. 19, 1998 .</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="27">
+                        <nplcit num="8">
+                            <text>- PerlShop Manual (version 2.2). 1996, ARPAnct Corp. http://www.w3u.com/grokksoft/shop/perlman.html. Accessed Nov. 19, 1998 .</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="28">
+                        <nplcit num="9">
+                            <text>- Sax Software Announces Sax NetSell; Sax NetSell s design time ActiveX controls make Internet commerce easy. 1997, Sax Software Corp.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="29">
+                        <nplcit num="10">
+                            <text>- Baron, Chris and Bob Weil, Implementing a Web Shopping Cart, Dr. Dobb s Journal, Sep. 1996, pp. 64, 66, 68 69, and 83 85.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="30">
+                        <nplcit num="11">
+                            <text>- Hoque, Reaz, A Shopping Cart Application with JavaScript, Web Techniques, May 1998, pp. 63, 65 66, and 68.</text>
+                        </nplcit>
+                    </citation>
+                </references-cited>
+            </bibliographic-data>
+            <abstract lang="en">
+                <p>A method and system for placing an order to purchase an item via the Internet. The order is placed by a purchaser at a client system and received by a server system. The server system receives purchaser information including identification of the purchaser, payment information, and shipment information from the client system. The server system then assigns a client identifier to the client system and associates the assigned client identifier with the received purchaser information. The server system sends to the client system the assigned client identifier and an HTML document identifying the item and including an order button. The client system receives and stores the assigned client identifier and receives and displays the HTML document. In response to the selection of the order button, the client system sends to the server system a request to purchase the identified item. The server system receives the request and combines the purchaser information associated with the client identifier of the client system to generate an order to purchase the item in accordance with the billing and shipment information whereby the purchaser effects the ordering of the product by selection of the order button.</p>
+            </abstract>
+        </exchange-document>
+    </exchange-documents>
+</ops:world-patent-data>

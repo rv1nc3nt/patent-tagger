@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="../../../../../style/exchange.xsl"?>
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <exchange-documents>
+        <exchange-document system="ops.epo.org" family-id="66994154" country="WO" doc-number="2019123456" kind="A1">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>WO</country>
+                        <doc-number>2019123456</doc-number>
+                        <kind>A1</kind>
+                        <date>20190627</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>WO2019123456</doc-number>
+                        <date>20190627</date>
+                    </document-id>
+                </publication-reference>
+                <classifications-ipcr>
+                    <classification-ipcr sequence="1">
+                        <text>G06F  15/    16            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="2">
+                        <text>G10L  15/    26            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="3">
+                        <text>H04M   1/    64            A I                    </text>
+                    </classification-ipcr>
+                    <classification-ipcr sequence="4">
+                        <text>H04M   3/    42            A I                    </text>
+                    </classification-ipcr>
+                </classifications-ipcr>
+                <patent-classifications>
+                    <patent-classification sequence="1">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>9035</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="2">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>953</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="3">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>9577</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="4">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>15</main-group>
+                        <subgroup>22</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="5">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>15</main-group>
+                        <subgroup>22</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="6">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>L</subclass>
+                        <main-group>67</main-group>
+                        <subgroup>025</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="7">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>3</main-group>
+                        <subgroup>4931</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="8">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>3</main-group>
+                        <subgroup>4931</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="9">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>15</main-group>
+                        <subgroup>26</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="10">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>15</main-group>
+                        <subgroup>26</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="11">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>2015</main-group>
+                        <subgroup>223</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="12">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>10</class>
+                        <subclass>L</subclass>
+                        <main-group>2015</main-group>
+                        <subgroup>223</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="13">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>551</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="14">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>551</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="15">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>553</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="16">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>553</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="17">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>554</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="18">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>554</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="19">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>655</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="20">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2203</main-group>
+                        <subgroup>655</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="21">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2250</main-group>
+                        <subgroup>60</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>GB</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="22">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>H</section>
+                        <class>04</class>
+                        <subclass>M</subclass>
+                        <main-group>2250</main-group>
+                        <subgroup>60</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                </patent-classifications>
+                <application-reference doc-id="515436792">
+                    <document-id document-id-type="docdb">
+                        <country>IL</country>
+                        <doc-number>2018051370</doc-number>
+                        <kind>W</kind>
+                        <date>20181218</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>WO2018IL51370</doc-number>
+                        <date>20181218</date>
+                    </document-id>
+                    <document-id document-id-type="original">
+                        <doc-number>IL2018/051370</doc-number>
+                    </document-id>
+                </application-reference>
+                <priority-claims>
+                    <priority-claim sequence="1" kind="national">
+                        <document-id document-id-type="docdb">
+                            <country>US</country>
+                            <doc-number>201762599934</doc-number>
+                            <kind>P</kind>
+                            <date>20171218</date>
+                        </document-id>
+                        <document-id document-id-type="epodoc">
+                            <doc-number>US201762599934P</doc-number>
+                            <date>20171218</date>
+                        </document-id>
+                        <document-id document-id-type="original">
+                            <doc-number>62/599,934</doc-number>
+                        </document-id>
+                    </priority-claim>
+                </priority-claims>
+                <parties>
+                    <applicants>
+                        <applicant sequence="1" data-format="epodoc">
+                            <applicant-name>
+                                <name>MAGIC SOLUTION CREATIVE COMMUNICATION AND COMPUTING LTD [IL]</name>
+                            </applicant-name>
+                        </applicant>
+                        <applicant sequence="1" data-format="original">
+                            <applicant-name>
+                                <name>MAGIC SOLUTION CREATIVE COMMUNICATION AND COMPUTING LTD</name>
+                            </applicant-name>
+                        </applicant>
+                    </applicants>
+                    <inventors>
+                        <inventor sequence="1" data-format="epodoc">
+                            <inventor-name>
+                                <name>BARNOY AMIR [IL]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="1" data-format="original">
+                            <inventor-name>
+                                <name>BARNOY, Amir</name>
+                            </inventor-name>
+                        </inventor>
+                    </inventors>
+                </parties>
+                <invention-title lang="fr">SYSTÈME ET PROCÉDÉ DE GESTION D'INFORMATIONS ENTRE UN SERVEUR ET UN DISPOSITIF INFORMATISÉ</invention-title>
+                <invention-title lang="en">A SYSTEM AND METHOD FOR MANAGING INFORMATION BETWEEN A SERVER AND A COMPUTERIZED DEVICE</invention-title>
+                <references-cited>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="1" office="US">
+                        <patcit dnum-type="publication number" num="1">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US2011202439</doc-number>
+                                <name>RICCI</name>
+                                <date>20110818</date>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>2011202439</doc-number>
+                                <kind>A1</kind>
+                                <name>RICCI</name>
+                                <date>20110818</date>
+                            </document-id>
+                        </patcit>
+                        <category>Y</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="2" office="US">
+                        <patcit dnum-type="publication number" num="2">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US2009276503</doc-number>
+                                <name>RENGER et al</name>
+                                <date>20091105</date>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>2009276503</doc-number>
+                                <kind>A1</kind>
+                                <name>RENGER et al</name>
+                                <date>20091105</date>
+                            </document-id>
+                        </patcit>
+                        <category>Y</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="3" office="US">
+                        <patcit dnum-type="publication number" num="3">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US2014187208</doc-number>
+                                <name>DE OLIVEIRA et al</name>
+                                <date>20140703</date>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>2014187208</doc-number>
+                                <kind>A1</kind>
+                                <name>DE OLIVEIRA et al</name>
+                                <date>20140703</date>
+                            </document-id>
+                        </patcit>
+                        <category>A</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="4" office="US">
+                        <patcit dnum-type="publication number" num="4">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US2005262260</doc-number>
+                                <name>KIM et al</name>
+                                <date>20051124</date>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>2005262260</doc-number>
+                                <kind>A1</kind>
+                                <name>KIM et al</name>
+                                <date>20051124</date>
+                            </document-id>
+                        </patcit>
+                        <category>A</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="5" office="US">
+                        <patcit dnum-type="publication number" num="5">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US7606706</doc-number>
+                                <name>RUBIN et al</name>
+                                <date>20091020</date>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>7606706</doc-number>
+                                <kind>B1</kind>
+                                <name>RUBIN et al</name>
+                                <date>20091020</date>
+                            </document-id>
+                        </patcit>
+                        <category>A</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                    <citation cited-phase="international-search-report" cited-by="examiner" sequence="6">
+                        <nplcit num="1">
+                            <text>- HUGGINS, ROY: "How Do You Document Emails and Text Messages Received From Clients?", PERSON CENTERED TECH., 18 August 2016 (2016-08-18), XP055620002, Retrieved from the Internet &lt;URL:https://personcenteredtech.com/2013/10/17/how-do-you-document-emails-and-text-messages-received-from-clients> [retrieved on 20190323]</text>
+                        </nplcit>
+                        <category>A</category>
+                        <rel-claims>1-20</rel-claims>
+                        <rel-passage>
+                            <passage>* entire document *</passage>
+                        </rel-passage>
+                    </citation>
+                </references-cited>
+            </bibliographic-data>
+            <abstract lang="en">
+                <p>The subject matter discloses a method and computerized product for processing information received at a computerized device and formatting the received information to a time-based and searchable feed. The information comprises communication sessions, either via text, video and audio, as well as media items and information collected via third party resources such as social networks and web pages. The method comprises processing the information from all the sources into a single time-based feed. The user can search the feed according to search queries, such as contact persons and other subjects and the search result, displayed as a time-based feed, includes reviewing the content in the media items and from the third party resources. One user can watch items from feeds of other users.</p>
+            </abstract>
+            <abstract lang="fr">
+                <p>La présente invention concerne un procédé et un produit informatisé permettant de traiter des informations reçues au niveau d'un dispositif informatisé et formater les informations reçues en un flux temporel et interrogeable. Les informations comprennent des sessions de communication, par l'intermédiaire de texte, de vidéo ou d'audio, ainsi que des éléments multimédias et des informations recueillis par l'intermédiaire de ressources tierces telles que des réseaux sociaux et des pages Web. Le procédé consiste à traiter les informations de toutes les sources en un seul flux temporel. L'utilisateur peut effectuer une recherche dans le flux selon des interrogations de recherche, telles que des personnes de contact et d'autres sujets et le résultat de recherche, affiché sous forme de flux temporel, contient l'examen du contenu dans les éléments multimédias et provenant des ressources tierces. Un utilisateur peut regarder des articles de flux d'autres utilisateurs.</p>
+            </abstract>
+        </exchange-document>
+    </exchange-documents>
+</ops:world-patent-data>

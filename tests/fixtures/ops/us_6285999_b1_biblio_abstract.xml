@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="../../../../../style/exchange.xsl"?>
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <exchange-documents>
+        <exchange-document system="ops.epo.org" family-id="26673538" country="US" doc-number="6285999" kind="B1">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>US</country>
+                        <doc-number>6285999</doc-number>
+                        <kind>B1</kind>
+                        <date>20010904</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>US6285999</doc-number>
+                        <date>20010904</date>
+                    </document-id>
+                </publication-reference>
+                <classification-ipc>
+                    <text>G06F17/30</text>
+                </classification-ipc>
+                <classifications-ipcr>
+                    <classification-ipcr sequence="1">
+                        <text>G06F  17/    30            A I                    </text>
+                    </classification-ipcr>
+                </classifications-ipcr>
+                <patent-classifications>
+                    <patent-classification sequence="1">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>382</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="2">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>382</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="3">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>951</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="4">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>G</section>
+                        <class>06</class>
+                        <subclass>F</subclass>
+                        <main-group>16</main-group>
+                        <subgroup>951</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>EP</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="5">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>Y</section>
+                        <class>10</class>
+                        <subclass>S</subclass>
+                        <main-group>707</main-group>
+                        <subgroup>99935</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="6">
+                        <classification-scheme office="EP" scheme="CPCI"/>
+                        <section>Y</section>
+                        <class>10</class>
+                        <subclass>S</subclass>
+                        <main-group>707</main-group>
+                        <subgroup>99937</subgroup>
+                        <classification-value>I</classification-value>
+                        <generating-office>US</generating-office>
+                    </patent-classification>
+                    <patent-classification sequence="1">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>1/1</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="2">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>707/999.005</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="3">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>707/999.007</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="4">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>707/E17.097</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="5">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>707/E17.108</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="6">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>715/206</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="7">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>715/207</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="8">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>715/230</classification-symbol>
+                    </patent-classification>
+                    <patent-classification sequence="9">
+                        <classification-scheme office="US" scheme="UC"/>
+                        <classification-symbol>715/256</classification-symbol>
+                    </patent-classification>
+                </patent-classifications>
+                <application-reference doc-id="45476746">
+                    <document-id document-id-type="docdb">
+                        <country>US</country>
+                        <doc-number>482798</doc-number>
+                        <kind>A</kind>
+                        <date>19980109</date>
+                    </document-id>
+                    <document-id document-id-type="epodoc">
+                        <doc-number>US19980004827</doc-number>
+                        <date>19980109</date>
+                    </document-id>
+                    <document-id document-id-type="original">
+                        <doc-number>09004827</doc-number>
+                    </document-id>
+                </application-reference>
+                <priority-claims>
+                    <priority-claim sequence="1" kind="national">
+                        <document-id document-id-type="docdb">
+                            <country>US</country>
+                            <doc-number>3520597</doc-number>
+                            <kind>P</kind>
+                            <date>19970110</date>
+                        </document-id>
+                        <document-id document-id-type="epodoc">
+                            <doc-number>US19970035205P</doc-number>
+                            <date>19970110</date>
+                        </document-id>
+                        <document-id document-id-type="epodoc">
+                            <doc-number>US19980004827</doc-number>
+                            <date>19980109</date>
+                        </document-id>
+                        <document-id document-id-type="original">
+                            <doc-number>60/035205</doc-number>
+                        </document-id>
+                    </priority-claim>
+                    <priority-claim sequence="2" kind="national">
+                        <document-id document-id-type="docdb">
+                            <country>US</country>
+                            <doc-number>482798</doc-number>
+                            <kind>A</kind>
+                            <date>19980109</date>
+                        </document-id>
+                    </priority-claim>
+                </priority-claims>
+                <parties>
+                    <applicants>
+                        <applicant sequence="1" data-format="epodoc">
+                            <applicant-name>
+                                <name>UNIV LELAND STANFORD JUNIOR [US]</name>
+                            </applicant-name>
+                        </applicant>
+                        <applicant sequence="1" data-format="original">
+                            <applicant-name>
+                                <name>THE BOARD OF TRUSTEES OF THE LELAND STANFORD JUNIOR UNIVERSITY</name>
+                            </applicant-name>
+                        </applicant>
+                    </applicants>
+                    <inventors>
+                        <inventor sequence="1" data-format="epodoc">
+                            <inventor-name>
+                                <name>PAGE LAWRENCE [US]</name>
+                            </inventor-name>
+                        </inventor>
+                        <inventor sequence="1" data-format="original">
+                            <inventor-name>
+                                <name>PAGE LAWRENCE</name>
+                            </inventor-name>
+                        </inventor>
+                    </inventors>
+                </parties>
+                <invention-title lang="en">Method for node ranking in a linked database</invention-title>
+                <references-cited>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="1">
+                        <patcit dnum-type="publication number" num="1">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5748954</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5748954</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="2">
+                        <nplcit num="1">
+                            <text>- S. Jeromy Carriere et al, "Web Query: Searching and Visualizing the Web through Connectivity", Computer Networks and ISDN Systems 29 (1997). pp. 1257-1267.*</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="3">
+                        <nplcit num="2">
+                            <text>- Wang et al "Prefetching in Worl Wide Web", IEEE 1996, pp. 28-32.*</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="4">
+                        <nplcit num="3">
+                            <text>- Ramer et al "Similarity, Probability and Database Organisation: Extended Abstract", 1996, pp. 272.276.*</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="5">
+                        <nplcit num="4">
+                            <text>- Craig Boyle "To link or not to link: An empirical comparison of Hypertext linking strategies". ACM 1992, pp. 221-231.*</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="6">
+                        <nplcit num="5">
+                            <text>- L. Katz, "A new status index derived from sociometric analysis," 1953, Psychometricka, vol. 18, pp. 39-43.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="7">
+                        <nplcit num="6">
+                            <text>- C.H. Hubbell, "An input-output approach to clique identification sociometry," 1965, pp. 377-399.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="8">
+                        <nplcit num="7">
+                            <text>- Mizruchi et al., "Techniques for disaggregating centrality scores in social networks," 1996, Sociological Methodology, pp. 26-48.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="9">
+                        <nplcit num="8">
+                            <text>- E. Garfield, "Citation analysis as a tool in journal evaluation," 1972, Science, vol. 178, pp. 471-479.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="10">
+                        <nplcit num="9">
+                            <text>- Pinski et al., "Citation influence for journal aggregates of scientific publications: Theory, with application to the literature of physics," 1976, Inf. Proc. And Management, vol. 12, pp. 297-312.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="11">
+                        <nplcit num="10">
+                            <text>- N. Geller, "On the citation influence methodology of Pinski and Narin," 1978, Inf. Proc. And Management, vol. 14, pp. 93-95.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="12">
+                        <nplcit num="11">
+                            <text>- P. Doreian, "Measuring the relative standing of disciplinary journals," 1988, Inf. Proc. And Management, vol. 24, pp. 45-56.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="13">
+                        <nplcit num="12">
+                            <text>- P. Doreian, "A measure of standing for citation networks within a wider environment," 1994, Inf. Proc. And Management, vol. 30, pp. 21-31.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="14">
+                        <nplcit num="13">
+                            <text>- Botafogo et al., "Structural analysis of hypertext: Identifying hierarchies and useful metrics," 1992, ACM Trans. Inc. Systems, vol. 10, pp. 142-180.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="15">
+                        <nplcit num="14">
+                            <text>- Mark E. Frisse, "Searching for information in a hypertext medical handbook," 1988, Communications of the ACM, vol. 31, No. 7, pp. 880-886.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="16">
+                        <nplcit num="15">
+                            <text>- Massimo Marchiori, "The quest for correct information on the Web: Hyper search engines," 1997, Computer Networks and ISDN Systems, vol. 29, No. 8-13, pp. 1225-1235.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="17">
+                        <nplcit num="16">
+                            <text>- Oliver A. McBryan, "GENVL and WWWW: Tools for taming the web," 1994, Proceedings of the first International Wold Wide Web Conference, pp. 1-13.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="18">
+                        <nplcit num="17">
+                            <text>- Carriere et al., "WebQuery: Searching and visualizing the web through connectivity," 1997, Proc. 6th International World Wide Web Conference, pp. 1-14.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="19">
+                        <nplcit num="18">
+                            <text>- Arocena et al., "Applications of a web query language," 1997, Computer Networks and ISDN Systems, vol. 29, No. 8-13, pp. 1305-1316.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="20">
+                        <nplcit num="19">
+                            <text>- Jon M. Kleinberg, "Authoritative sources in a hyperlinked environment," 1998, Proc. Of the 9th Annual ACM-SIAM Symposium on Discrete Algorithms, pp. 668-677.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="undefined" cited-by="applicant" sequence="21">
+                        <nplcit num="20">
+                            <text>- Henzinger et al., "Measuring index quality using random walks on the web", 1999, Proc. of the 8th International World Wide Web Conference, pp. 213-225.</text>
+                        </nplcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="1">
+                        <patcit dnum-type="publication number" num="1">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US4953106</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>4953106</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="2">
+                        <patcit dnum-type="publication number" num="2">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5450535</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5450535</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="3">
+                        <patcit dnum-type="publication number" num="3">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5752241</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5752241</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="4">
+                        <patcit dnum-type="publication number" num="4">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5832494</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5832494</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="5">
+                        <patcit dnum-type="publication number" num="5">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US5848407</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>5848407</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                    <citation cited-phase="national-search-report" cited-by="examiner" sequence="6">
+                        <patcit dnum-type="publication number" num="6">
+                            <document-id document-id-type="epodoc">
+                                <doc-number>US6014678</doc-number>
+                            </document-id>
+                            <document-id document-id-type="docdb">
+                                <country>US</country>
+                                <doc-number>6014678</doc-number>
+                                <kind>A</kind>
+                            </document-id>
+                        </patcit>
+                    </citation>
+                </references-cited>
+            </bibliographic-data>
+            <abstract lang="en">
+                <p>A method assigns importance ranks to nodes in a linked database, such as any database of documents containing citations, the world wide web or any other hypermedia database. The rank assigned to a document is calculated from the ranks of documents citing it. In addition, the rank of a document is calculated from a constant representing the probability that a browser through the database will randomly jump to the document. The method is particularly useful in enhancing the performance of search engine results for hypermedia databases, such as the world wide web, whose documents have a large variation in quality.</p>
+            </abstract>
+        </exchange-document>
+    </exchange-documents>
+</ops:world-patent-data>

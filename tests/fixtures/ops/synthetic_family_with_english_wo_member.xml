@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE, not a recorded live response. Pairs with
+  synthetic_ep_fr_de_only_a1_biblio_abstract.xml: same family-id, but this
+  member (a WO publication) carries an English abstract, exercising the
+  "family member" fallback in section 5.3 (preferring WO, then US, GB, EP).
+-->
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <exchange-documents>
+        <exchange-document system="ops.epo.org" family-id="55555555" country="EP" doc-number="2500000" kind="A1">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>EP</country>
+                        <doc-number>2500000</doc-number>
+                        <kind>A1</kind>
+                        <date>20120912</date>
+                    </document-id>
+                </publication-reference>
+                <invention-title lang="de">Vorrichtung zur Datenverarbeitung</invention-title>
+                <invention-title lang="fr">Dispositif de traitement de donn&#233;es</invention-title>
+            </bibliographic-data>
+            <abstract lang="de">
+                <p>Die Erfindung betrifft eine Vorrichtung zur Datenverarbeitung mit einem Prozessor und einem Speicher.</p>
+            </abstract>
+        </exchange-document>
+        <exchange-document system="ops.epo.org" family-id="55555555" country="WO" doc-number="2012000001" kind="A1">
+            <bibliographic-data>
+                <publication-reference>
+                    <document-id document-id-type="docdb">
+                        <country>WO</country>
+                        <doc-number>2012000001</doc-number>
+                        <kind>A1</kind>
+                        <date>20120105</date>
+                    </document-id>
+                </publication-reference>
+                <invention-title lang="de">Vorrichtung zur Datenverarbeitung</invention-title>
+                <invention-title lang="fr">Dispositif de traitement de donn&#233;es</invention-title>
+                <invention-title lang="en">Data processing apparatus</invention-title>
+            </bibliographic-data>
+            <abstract lang="en">
+                <p>The invention relates to a data processing apparatus comprising a processor and a memory.</p>
+            </abstract>
+        </exchange-document>
+    </exchange-documents>
+</ops:world-patent-data>
