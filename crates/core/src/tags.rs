@@ -5,7 +5,7 @@
 use crate::storage::StorageError;
 use rusqlite::{params, Connection, OptionalExtension};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct TagRow {
     pub id: i64,
     pub name: String,

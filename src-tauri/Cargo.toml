@@ -26,6 +26,8 @@ keyring = "4.2.0"
 patent-ops = { version = "0.1.0", path = "../crates/ops" }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-fs = "2.5.2"
+patent-embed = { version = "0.1.0", path = "../crates/embed" }
+tauri-plugin-opener = "2.5.5"
 
 [dev-dependencies]
 tempfile = "3.27.0"

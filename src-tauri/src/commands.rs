@@ -1,9 +1,13 @@
-//! Tauri commands for the Import screen (SPEC sections 5.1, 8).
+//! Tauri commands for the Import and Review screens (SPEC sections 5.1, 8).
 
 use crate::db::Db;
+use crate::model::Model;
 use core_lib::rusqlite::Connection;
-use core_lib::{documents, jobs, number};
+use core_lib::tags::TagRow;
+use core_lib::{documents, jobs, labels, number, tags};
+use embed_lib::Embedder;
 use serde::Serialize;
+use std::collections::HashSet;
 use tauri::State;
 
 #[derive(Debug, Serialize, Default, PartialEq, Eq)]
@@ -57,6 +61,7 @@ pub async fn test_ops_connection(state: State<'_, Db>) -> Result<String, String>
 pub async fn run_import_jobs(
     app: tauri::AppHandle,
     state: State<'_, Db>,
+    model: State<'_, Model>,
 ) -> Result<Vec<crate::import_worker::DocumentOutcome>, String> {
     use tauri::Emitter;
 
@@ -64,7 +69,7 @@ pub async fn run_import_jobs(
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    Ok(crate::import_worker::run(&state.conn, &client, |outcome| {
+    Ok(crate::import_worker::run(&state.conn, &client, &model.0, |outcome| {
         let _ = app.emit("import-progress", outcome);
     })
     .await)
@@ -129,6 +134,83 @@ fn import_numbers_into(
     }
 
     Ok(report)
+}
+
+#[tauri::command]
+pub fn list_tags(state: State<Db>) -> Result<Vec<TagRow>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    tags::list_active(&conn).map_err(|e| e.to_string())
+}
+
+/// Creates a tag and computes its `"{name}: {definition}"` embedding
+/// immediately (SPEC 7.2), so zero-shot scoring never has to fall back to
+/// computing it lazily during review.
+#[tauri::command]
+pub fn create_tag(
+    state: State<Db>,
+    model: State<Model>,
+    name: String,
+    definition: String,
+    color: Option<String>,
+    hotkey: Option<String>,
+) -> Result<TagRow, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let now = current_timestamp();
+    let id = tags::create(&conn, &name, &definition, color.as_deref(), hotkey.as_deref(), &now)
+        .map_err(|e| e.to_string())?;
+
+    let text = format!("{name}: {definition}");
+    let vector = model
+        .0
+        .embed(&[text])
+        .map_err(|e| e.to_string())?
+        .pop()
+        .ok_or("embedder returned no vector")?;
+    core_lib::embeddings::store_tag_embedding(&conn, id, model.0.model_id(), 1, &vector)
+        .map_err(|e| e.to_string())?;
+
+    tags::get(&conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "tag vanished immediately after creation".to_string())
+}
+
+#[tauri::command]
+pub fn archive_tag(state: State<Db>, tag_id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    tags::archive(&conn, tag_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn review_queue(state: State<Db>) -> Result<Vec<documents::QueueEntry>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    documents::list_queue(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn document_detail(
+    state: State<Db>,
+    model: State<Model>,
+    doc_id: i64,
+) -> Result<Option<crate::review::DocumentView>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    crate::review::document_view(&conn, &model.0, doc_id).map_err(|e| e.to_string())
+}
+
+/// Validates a document: every active tag gets a human `pos`/`neg` label
+/// (SPEC 7.1), and the document leaves the review queue.
+#[tauri::command]
+pub fn validate_document(state: State<Db>, doc_id: i64, checked_tag_ids: Vec<i64>) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let active_tags = tags::list_active(&conn).map_err(|e| e.to_string())?;
+    let checked: HashSet<i64> = checked_tag_ids.into_iter().collect();
+    labels::validate_document(&conn, doc_id, &active_tags, &checked, &current_timestamp())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    labels::skip_document(&conn, doc_id).map_err(|e| e.to_string())
 }
 
 fn current_timestamp() -> String {

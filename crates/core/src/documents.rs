@@ -16,6 +16,78 @@ pub struct DocumentRow {
     pub review_state: String,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct QueueEntry {
+    pub id: i64,
+    pub pub_key: String,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+pub struct DocumentDetail {
+    pub id: i64,
+    pub pub_key: String,
+    pub title: Option<String>,
+    pub abstract_text: Option<String>,
+    pub applicants: Vec<String>,
+    pub publication_date: Option<String>,
+    pub cpc: Vec<String>,
+    pub ipc: Vec<String>,
+    pub kind_codes: Vec<String>,
+    pub application_number: Option<String>,
+    pub family_id: Option<String>,
+}
+
+/// Documents ready for review (SPEC section 8): fetched (title+abstract,
+/// and therefore an embedding) and not yet validated/skipped, in import
+/// order (M4's only ordering option - see docs/DECISIONS.md).
+pub fn list_queue(conn: &Connection) -> Result<Vec<QueueEntry>, StorageError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, pub_key, title FROM documents
+         WHERE fetch_status = 'fetched' AND review_state = 'queued'
+         ORDER BY id ASC",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(QueueEntry {
+                id: row.get(0)?,
+                pub_key: row.get(1)?,
+                title: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn get_full(conn: &Connection, doc_id: i64) -> Result<Option<DocumentDetail>, StorageError> {
+    conn.query_row(
+        "SELECT id, pub_key, title, \"abstract\", applicants, publication_date, cpc, ipc,
+                kind_codes, application_number, family_id
+         FROM documents WHERE id = ?1",
+        params![doc_id],
+        |row| {
+            let json_array = |s: Option<String>| -> Vec<String> {
+                s.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+            };
+            Ok(DocumentDetail {
+                id: row.get(0)?,
+                pub_key: row.get(1)?,
+                title: row.get(2)?,
+                abstract_text: row.get(3)?,
+                applicants: json_array(row.get(4)?),
+                publication_date: row.get(5)?,
+                cpc: json_array(row.get(6)?),
+                ipc: json_array(row.get(7)?),
+                kind_codes: json_array(row.get(8)?),
+                application_number: row.get(9)?,
+                family_id: row.get(10)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(StorageError::from)
+}
+
 /// Inserts a new document in `fetch_status = "pending"`, `review_state =
 /// "queued"`. Returns `Ok(None)` instead of erroring when `pub_key` already
 /// exists, since the import flow reports duplicates rather than failing
@@ -153,6 +225,76 @@ fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
 mod tests {
     use super::*;
     use crate::storage;
+
+    #[test]
+    fn queue_only_includes_fetched_and_queued_documents_in_import_order() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        insert_pending(&conn, "EP1111111", "EP1111111", "2026-01-01T00:00:00Z").unwrap();
+        insert_pending(&conn, "EP2222222", "EP2222222", "2026-01-01T00:00:00Z").unwrap();
+        insert_pending(&conn, "EP3333333", "EP3333333", "2026-01-01T00:00:00Z").unwrap();
+        let fetched_and_queued = find_by_pub_key(&conn, "EP1111111").unwrap().unwrap();
+        let fetched_but_validated = find_by_pub_key(&conn, "EP2222222").unwrap().unwrap();
+        let queued_but_not_fetched = find_by_pub_key(&conn, "EP3333333").unwrap().unwrap();
+
+        store_fetched(
+            &conn,
+            fetched_and_queued.id,
+            &FetchedData {
+                title: Some("A".to_string()),
+                abstract_text: Some("Abstract A".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        store_fetched(
+            &conn,
+            fetched_but_validated.id,
+            &FetchedData {
+                title: Some("B".to_string()),
+                abstract_text: Some("Abstract B".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE documents SET review_state = 'validated' WHERE id = ?1",
+            params![fetched_but_validated.id],
+        )
+        .unwrap();
+        let _ = queued_but_not_fetched;
+
+        let queue = list_queue(&conn).unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].pub_key, "EP1111111");
+        assert_eq!(queue[0].title.as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn get_full_parses_json_array_columns() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let doc_id = insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z")
+            .unwrap()
+            .unwrap();
+        store_fetched(
+            &conn,
+            doc_id,
+            &FetchedData {
+                title: Some("A gadget".to_string()),
+                abstract_text: Some("An abstract".to_string()),
+                applicants: vec!["ACME".to_string(), "Foo Corp".to_string()],
+                cpc: vec!["B28B1/29".to_string()],
+                ipc: vec!["B28B1/29".to_string()],
+                kind_codes: vec!["A1".to_string(), "B1".to_string()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let detail = get_full(&conn, doc_id).unwrap().unwrap();
+        assert_eq!(detail.title.as_deref(), Some("A gadget"));
+        assert_eq!(detail.applicants, vec!["ACME", "Foo Corp"]);
+        assert_eq!(detail.kind_codes, vec!["A1", "B1"]);
+    }
 
     #[test]
     fn inserting_the_same_pub_key_twice_reports_a_duplicate() {

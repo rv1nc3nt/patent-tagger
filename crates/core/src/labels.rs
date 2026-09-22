@@ -6,7 +6,7 @@
 use crate::storage::StorageError;
 use crate::tags::TagRow;
 use rusqlite::{params, Connection};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabelState {
@@ -70,6 +70,31 @@ pub fn skip_document(conn: &Connection, doc_id: i64) -> Result<(), StorageError>
     Ok(())
 }
 
+/// Every document's human label for `tag_id` (SPEC 7.2: the k-NN pool of
+/// "neighbours with a human label for t").
+pub fn human_labels_for_tag(
+    conn: &Connection,
+    tag_id: i64,
+) -> Result<HashMap<i64, LabelState>, StorageError> {
+    let mut stmt = conn.prepare(
+        "SELECT doc_id, state FROM labels WHERE tag_id = ?1 AND source = 'human'",
+    )?;
+    let rows = stmt
+        .query_map(params![tag_id], |row| {
+            let doc_id: i64 = row.get(0)?;
+            let state: String = row.get(1)?;
+            Ok((doc_id, state))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows
+        .into_iter()
+        .map(|(doc_id, state)| {
+            let state = if state == "pos" { LabelState::Pos } else { LabelState::Neg };
+            (doc_id, state)
+        })
+        .collect())
+}
+
 /// The tag IDs this document has a human `pos` label for, e.g. to know
 /// which checkboxes to pre-check when re-opening an already-validated
 /// document.
@@ -100,6 +125,20 @@ mod tests {
             tags::get(conn, battery_id).unwrap().unwrap(),
             tags::get(conn, solar_id).unwrap().unwrap(),
         )
+    }
+
+    #[test]
+    fn human_labels_for_tag_reports_both_pos_and_neg() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+        let checked: HashSet<i64> = [battery.id].into_iter().collect();
+        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &checked, NOW).unwrap();
+
+        let battery_labels = human_labels_for_tag(&conn, battery.id).unwrap();
+        assert_eq!(battery_labels.get(&doc_id), Some(&LabelState::Pos));
+
+        let solar_labels = human_labels_for_tag(&conn, solar.id).unwrap();
+        assert_eq!(solar_labels.get(&doc_id), Some(&LabelState::Neg));
     }
 
     #[test]

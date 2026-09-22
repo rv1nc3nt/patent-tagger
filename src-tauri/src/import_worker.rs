@@ -3,7 +3,8 @@
 
 use core_lib::rusqlite::Connection;
 use core_lib::selection::{self, Candidate};
-use core_lib::{documents, jobs, time};
+use core_lib::{documents, embeddings, jobs, time};
+use embed_lib::Embedder;
 use ops_lib::biblio::{self, Publication};
 use ops_lib::client::OpsClient;
 use serde::Deserialize;
@@ -38,6 +39,7 @@ pub struct DocumentOutcome {
 pub async fn run(
     conn_mutex: &std::sync::Mutex<Connection>,
     client: &OpsClient,
+    embedder: &impl Embedder,
     mut on_progress: impl FnMut(&DocumentOutcome),
 ) -> Vec<DocumentOutcome> {
     let pending = {
@@ -74,7 +76,7 @@ pub async fn run(
             }
         };
 
-        let outcome = process_one(conn_mutex, client, &job, &payload, &now).await;
+        let outcome = process_one(conn_mutex, client, embedder, &job, &payload, &now).await;
         on_progress(&outcome);
         results.push(outcome);
     }
@@ -85,6 +87,7 @@ pub async fn run(
 async fn process_one(
     conn_mutex: &std::sync::Mutex<Connection>,
     client: &OpsClient,
+    embedder: &impl Embedder,
     job: &core_lib::jobs::JobRow,
     payload: &ImportPayload,
     now: &str,
@@ -109,6 +112,25 @@ async fn process_one(
                     related_pub_keys: vec![],
                 };
             }
+
+            // Tagging relies on the abstract (SPEC section 1); only
+            // "fetched" documents (title + English abstract both present)
+            // get embedded, so the Review queue only ever sees documents
+            // that can actually be scored.
+            if let (Some(title), Some(abstract_text)) = (&data.title, &data.abstract_text) {
+                let text = format!("{title}. {abstract_text}");
+                if let Ok(mut vectors) = embedder.embed(&[text]) {
+                    if let Some(vector) = vectors.pop() {
+                        let _ = embeddings::store_document_embedding(
+                            &conn,
+                            payload.doc_id,
+                            embedder.model_id(),
+                            &vector,
+                        );
+                    }
+                }
+            }
+
             let _ = jobs::mark_done(&conn, job.id, now);
             let related_pub_keys = documents::find_related(&conn, payload.doc_id)
                 .unwrap_or_default()
