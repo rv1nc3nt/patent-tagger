@@ -54,4 +54,23 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 
 - `crates/core::storage`: one migration (`schema.sql`) creating the full section 4.2 schema, run through `rusqlite_migration`. FTS5 external-content tables (`documents_fts`, `fulltext_fts`) kept in sync via `INSERT`/`UPDATE`/`DELETE` triggers, tested directly (insert a document, update its title/abstract, confirm an FTS `MATCH` finds it).
 - `crates/core::number`: no `regex` dependency added (not named in SPEC) — the parser is hand-written char/byte scanning over a compact (separator-stripped) string, splitting a trailing `letter + digits` kind code from the numeric prefix. Unknown country codes (anything other than EP/US/WO) return `ParseOutcome::NeedsNormalisation` rather than failing, per the earlier parser-fallback-contract decision.
+## 2026-09-22 — OPS v3.2 endpoint paths verified for M2
+
+**Question:** CLAUDE.md requires checking exact OPS endpoint paths/headers against the current Reference Guide before coding.
+
+**Decision:** Confirmed against the live host (`ops.epo.org`) with unauthenticated probe requests — a wrong path 404s, a recognized-but-unauthorized path 403s with `AnonymousQuotaPerDay`/Fair Use rejection reasons, which lets path shape be verified without spending real quota:
+- Base URL `https://ops.epo.org/3.2/rest-services/`, matching SPEC section 5.4.
+- OAuth2 token endpoint `POST https://ops.epo.org/3.2/auth/accesstoken`, HTTP Basic auth, form body `grant_type=client_credentials`. Error body: `<error><code>401</code><message>ClientId is Invalid</message></error>`.
+- Published data: `/published-data/{publication|application|priority}/{docdb|epodoc|original}/{number}/{constituents}`, constituents comma-joined (verified `biblio,abstract` as one call).
+- Number service: `/number-service/{reference-type}/{format}/{number}/{target-format}`.
+- Family: `/family/publication/{format}/{number}/{constituents}`.
+- Images/fulltext: `/published-data/publication/{format}/{number}/images` and `.../fulltext`.
+- Throttling header `X-Throttling-Control`, format `idle (retrieval=green:200, search=yellow:20, inpadoc=red:30, images=green:200, other=green:1000)` — overall state (idle/busy/overloaded) then per-category `colour:limit`. No SPEC deviation found; exact quota-header names (vs. throttling) to be confirmed against a real authenticated response once credentials are available.
+
+## 2026-09-22 — M2 credentials scope
+
+**Question:** M2's acceptance needs real OPS credentials (live 20-document import, fixture recording), but the full Settings screen is M7.
+
+**Decision:** Build a minimal credentials path now — `keyring`-backed storage, Tauri commands, and a bare form with a "Test connection" button — not the full Settings screen. Expand at M7. Credentials for fixture-recording/live-testing are supplied via a local, gitignored `.env` (never pasted into chat).
+
 - `src-tauri::platform`: `resolve_data_dir()` is OS-gated (`#[cfg(windows)]` / `#[cfg(target_os = "linux")]`) per section 2, delegating to `windows.rs`/`linux.rs` for the actual base-directory and portable-mode-directory lookup (Linux additionally checks `$APPIMAGE`). The portability check itself (`portable.flag` present + directory writable) is a pure function of a `&Path`, so it's unit-tested with real temp directories instead of mocking the OS calls.
