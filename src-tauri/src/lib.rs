@@ -3,6 +3,7 @@ mod db;
 mod import_worker;
 mod model;
 mod platform;
+mod retrain;
 mod review;
 
 use tauri::Manager;
@@ -26,6 +27,8 @@ pub fn run() {
       commands::document_detail,
       commands::validate_document,
       commands::skip_document,
+      commands::retrain_now,
+      commands::tag_metrics,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

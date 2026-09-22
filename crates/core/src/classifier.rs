@@ -21,6 +21,10 @@ pub struct Classifier {
     pub bias: f32,
     pub n_pos: i64,
     pub n_neg: i64,
+    /// When this classifier was trained - `None` fresh out of [`train`]
+    /// (which doesn't know the wall-clock time), `Some` once loaded back
+    /// from storage. Part of SPEC 7.3's `model_version` string.
+    pub trained_at: Option<String>,
 }
 
 impl Classifier {
@@ -84,6 +88,7 @@ pub fn train(samples: &[(Vec<f32>, bool)], l2_lambda: f32) -> Option<Classifier>
         bias,
         n_pos: n_pos as i64,
         n_neg: n_neg as i64,
+        trained_at: None,
     })
 }
 
@@ -130,7 +135,7 @@ pub fn store(
 
 pub fn load(conn: &Connection, tag_id: i64, model_id: &str) -> Result<Option<Classifier>, StorageError> {
     conn.query_row(
-        "SELECT weights, bias, n_pos, n_neg FROM classifiers WHERE tag_id = ?1 AND model_id = ?2",
+        "SELECT weights, bias, n_pos, n_neg, trained_at FROM classifiers WHERE tag_id = ?1 AND model_id = ?2",
         params![tag_id, model_id],
         |row| {
             let weights: Vec<u8> = row.get(0)?;
@@ -139,6 +144,7 @@ pub fn load(conn: &Connection, tag_id: i64, model_id: &str) -> Result<Option<Cla
                 bias: row.get(1)?,
                 n_pos: row.get(2)?,
                 n_neg: row.get(3)?,
+                trained_at: row.get(4)?,
             })
         },
     )
@@ -204,6 +210,7 @@ mod tests {
         assert_eq!(loaded.bias, classifier.bias);
         assert_eq!(loaded.n_pos, 10);
         assert_eq!(loaded.n_neg, 10);
+        assert_eq!(loaded.trained_at.as_deref(), Some("2026-01-01T00:00:00Z"));
 
         assert_eq!(load(&conn, tag_id, "other-model").unwrap(), None);
     }

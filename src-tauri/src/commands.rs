@@ -198,19 +198,80 @@ pub fn document_detail(
 
 /// Validates a document: every active tag gets a human `pos`/`neg` label
 /// (SPEC 7.1), and the document leaves the review queue.
+///
+/// SPEC 7.4: scores are recorded to `predictions` *before* the labels are
+/// applied, so the prequential log measures genuine out-of-sample
+/// performance rather than what the model looks like after learning from
+/// this very document.
 #[tauri::command]
-pub fn validate_document(state: State<Db>, doc_id: i64, checked_tag_ids: Vec<i64>) -> Result<(), String> {
+pub fn validate_document(
+    state: State<Db>,
+    model: State<Model>,
+    doc_id: i64,
+    checked_tag_ids: Vec<i64>,
+) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let now = current_timestamp();
     let active_tags = tags::list_active(&conn).map_err(|e| e.to_string())?;
+
+    let scores = crate::review::score_document(&conn, &model.0, &active_tags, doc_id).map_err(|e| e.to_string())?;
+    for tag_score in &scores {
+        if let Some(score) = tag_score.score {
+            core_lib::predictions::record(
+                &conn,
+                doc_id,
+                tag_score.tag_id,
+                &tag_score.model_version,
+                score,
+                tag_score.suggested,
+                &now,
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
     let checked: HashSet<i64> = checked_tag_ids.into_iter().collect();
-    labels::validate_document(&conn, doc_id, &active_tags, &checked, &current_timestamp())
-        .map_err(|e| e.to_string())
+    labels::validate_document(&conn, doc_id, &active_tags, &checked, &now).map_err(|e| e.to_string())?;
+
+    if crate::retrain::is_scheduled_retrain_point(&conn).map_err(|e| e.to_string())? {
+        crate::retrain::retrain_eligible_tags(&conn, &model.0, &now).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     labels::skip_document(&conn, doc_id).map_err(|e| e.to_string())
+}
+
+/// On-demand retraining (SPEC 7.2: "or on demand"), in addition to the
+/// automatic every-10-validations trigger in `validate_document`.
+#[tauri::command]
+pub fn retrain_now(state: State<Db>, model: State<Model>) -> Result<usize, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    crate::retrain::retrain_eligible_tags(&conn, &model.0, &current_timestamp()).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TagMetricsRow {
+    pub name: String,
+    #[serde(flatten)]
+    pub metrics: core_lib::predictions::TagMetrics,
+}
+
+#[tauri::command]
+pub fn tag_metrics(state: State<Db>) -> Result<Vec<TagMetricsRow>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    tags::list_active(&conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|tag| {
+            core_lib::predictions::tag_metrics(&conn, tag.id)
+                .map(|metrics| TagMetricsRow { name: tag.name, metrics })
+                .map_err(|e| e.to_string())
+        })
+        .collect()
 }
 
 fn current_timestamp() -> String {

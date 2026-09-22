@@ -66,6 +66,30 @@ pub fn list_validated_document_embeddings(
     Ok(rows.into_iter().map(|(id, bytes)| (id, from_bytes(&bytes))).collect())
 }
 
+/// `(embedding, is_positive)` for every document with a human label for
+/// `tag_id` and an embedding under `model_id` - training data for
+/// [`crate::classifier::train`] (SPEC 7.1: "only source = human labels are
+/// used").
+pub fn training_samples_for_tag(
+    conn: &Connection,
+    tag_id: i64,
+    model_id: &str,
+) -> Result<Vec<(Vec<f32>, bool)>, StorageError> {
+    let mut stmt = conn.prepare(
+        "SELECT e.vector, l.state FROM labels l
+         JOIN embeddings e ON e.doc_id = l.doc_id AND e.model_id = ?2
+         WHERE l.tag_id = ?1 AND l.source = 'human'",
+    )?;
+    let rows = stmt
+        .query_map(params![tag_id, model_id], |row| {
+            let bytes: Vec<u8> = row.get(0)?;
+            let state: String = row.get(1)?;
+            Ok((bytes, state == "pos"))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows.into_iter().map(|(bytes, is_pos)| (from_bytes(&bytes), is_pos)).collect())
+}
+
 pub fn store_tag_embedding(
     conn: &Connection,
     tag_id: i64,
@@ -114,6 +138,31 @@ mod tests {
         store_document_embedding(&conn, doc.id, MODEL, &vector).unwrap();
         let loaded = get_document_embedding(&conn, doc.id, MODEL).unwrap().unwrap();
         assert_eq!(loaded, vector);
+    }
+
+    #[test]
+    fn training_samples_pairs_embeddings_with_human_labels() {
+        use crate::labels;
+        use std::collections::HashSet;
+
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = crate::tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+        let tag = crate::tags::get(&conn, tag_id).unwrap().unwrap();
+
+        documents::insert_pending(&conn, "EP1111111", "EP1111111", "2026-01-01T00:00:00Z").unwrap();
+        let pos_doc = documents::find_by_pub_key(&conn, "EP1111111").unwrap().unwrap();
+        store_document_embedding(&conn, pos_doc.id, MODEL, &[1.0, 0.0]).unwrap();
+        labels::validate_document(&conn, pos_doc.id, &[tag.clone()], &[tag_id].into_iter().collect::<HashSet<_>>(), "2026-01-01T00:00:00Z").unwrap();
+
+        documents::insert_pending(&conn, "EP2222222", "EP2222222", "2026-01-01T00:00:00Z").unwrap();
+        let neg_doc = documents::find_by_pub_key(&conn, "EP2222222").unwrap().unwrap();
+        store_document_embedding(&conn, neg_doc.id, MODEL, &[0.0, 1.0]).unwrap();
+        labels::validate_document(&conn, neg_doc.id, &[tag.clone()], &HashSet::new(), "2026-01-01T00:00:00Z").unwrap();
+
+        let samples = training_samples_for_tag(&conn, tag_id, MODEL).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert!(samples.contains(&(vec![1.0, 0.0], true)));
+        assert!(samples.contains(&(vec![0.0, 1.0], false)));
     }
 
     #[test]
