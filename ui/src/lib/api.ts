@@ -42,3 +42,80 @@ export function testOpsConnection(): Promise<string> {
 export function onImportProgress(callback: (outcome: DocumentOutcome) => void): Promise<UnlistenFn> {
   return listen<DocumentOutcome>("import-progress", (event) => callback(event.payload));
 }
+
+export interface TagRow {
+  id: number;
+  name: string;
+  definition: string;
+  color: string | null;
+  hotkey: string | null;
+  version: number;
+  archived: boolean;
+}
+
+export interface QueueEntry {
+  id: number;
+  pub_key: string;
+  title: string | null;
+}
+
+export interface DocumentDetail {
+  id: number;
+  pub_key: string;
+  title: string | null;
+  abstract_text: string | null;
+  applicants: string[];
+  publication_date: string | null;
+  cpc: string[];
+  ipc: string[];
+  kind_codes: string[];
+  application_number: string | null;
+  family_id: string | null;
+}
+
+export interface TagScore {
+  tag_id: number;
+  name: string;
+  color: string | null;
+  hotkey: string | null;
+  score: number | null;
+  source: "zero_shot" | "knn" | null;
+  suggested: boolean;
+}
+
+export interface DocumentView extends DocumentDetail {
+  tags: TagScore[];
+}
+
+export function listTags(): Promise<TagRow[]> {
+  return invoke("list_tags");
+}
+
+export function createTag(
+  name: string,
+  definition: string,
+  color: string | null,
+  hotkey: string | null,
+): Promise<TagRow> {
+  return invoke("create_tag", { name, definition, color, hotkey });
+}
+
+export function archiveTag(tagId: number): Promise<void> {
+  return invoke("archive_tag", { tagId });
+}
+
+export function reviewQueue(): Promise<QueueEntry[]> {
+  return invoke("review_queue");
+}
+
+export function documentDetail(docId: number): Promise<DocumentView | null> {
+  return invoke("document_detail", { docId });
+}
+
+export function validateDocument(docId: number, checkedTagIds: number[]): Promise<void> {
+  return invoke("validate_document", { docId, checkedTagIds });
+}
+
+export function skipDocument(docId: number): Promise<void> {
+  return invoke("skip_document", { docId });
+}
