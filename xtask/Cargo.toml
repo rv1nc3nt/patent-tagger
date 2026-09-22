@@ -7,3 +7,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
+half = "2.7.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
+safetensors = "0.8.0"
+sha2 = "0.11.0"

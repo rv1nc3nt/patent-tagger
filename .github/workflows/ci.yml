@@ -26,12 +26,12 @@ jobs:
       - run: npm ci
         working-directory: ui
 
-      # TODO(M3): run `cargo xtask fetch-model` here once it is implemented,
-      # before fmt/clippy/test, so embed's parity test can run with weights present.
+      - run: cargo xtask fetch-model
 
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo test -p patent-embed --features parity
 
       - name: cargo install tauri-cli
         run: cargo install tauri-cli --locked --version "^2"
@@ -91,11 +91,12 @@ jobs:
       - run: npm ci
         working-directory: ui
 
-      # TODO(M3): run `cargo xtask fetch-model` here once it is implemented.
+      - run: cargo xtask fetch-model
 
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo test -p patent-embed --features parity
 
       - name: cargo install tauri-cli
         run: cargo install tauri-cli --locked --version "^2"

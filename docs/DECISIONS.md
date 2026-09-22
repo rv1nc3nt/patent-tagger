@@ -54,6 +54,24 @@ Record of decisions made where the specification was ambiguous or silent, per `C
 
 - `crates/core::storage`: one migration (`schema.sql`) creating the full section 4.2 schema, run through `rusqlite_migration`. FTS5 external-content tables (`documents_fts`, `fulltext_fts`) kept in sync via `INSERT`/`UPDATE`/`DELETE` triggers, tested directly (insert a document, update its title/abstract, confirm an FTS `MATCH` finds it).
 - `crates/core::number`: no `regex` dependency added (not named in SPEC) — the parser is hand-written char/byte scanning over a compact (separator-stripped) string, splitting a trailing `letter + digits` kind code from the numeric prefix. Unknown country codes (anything other than EP/US/WO) return `ParseOutcome::NeedsNormalisation` rather than failing, per the earlier parser-fallback-contract decision.
+## 2026-09-22 — M3 acceptance verified: parity test passes, throughput measured
+
+**Result:** `cargo test -p patent-embed --features parity` passes: all 10 committed reference cases (real `sentence-transformers` output for `BAAI/bge-small-en-v1.5` at the pinned revision) match the Rust/candle implementation at cosine similarity ≥ 0.999. Confirmed the model's own `1_Pooling/config.json` specifies `pooling_mode_cls_token: true` (matching SPEC section 6 and our implementation), not mean pooling.
+
+Generating the reference vectors needed a fix: `sentence-transformers`/`torch` auto-detected a GPU in this sandbox that its installed build couldn't actually use (`CUDA error: no kernel image is available for execution on the device`). Fixed by passing `device="cpu"` explicitly to `SentenceTransformer(...)` in `xtask/reference_embeddings.py` — also the more correct choice regardless, since SPEC section 2 is CPU-only end to end and candle's side (`Device::Cpu`) never used the GPU either.
+
+Throughput measured (release build, this sandbox, CPU, batch size 32): **25.0 texts/sec, 40.0 ms/text**. Recorded in the README per SPEC section 6.
+
+## 2026-09-22 — `onig` (C) turns out to be unavoidable via `candle-core`
+
+**Question:** Section 6 says "Prefer a pure-Rust regex backend over `onig` if the feature set allows; verify" for the `tokenizers` crate, and section 2's hard constraint refuses any C toolchain requirement beyond what `rusqlite/bundled` needs.
+
+**Investigation:** `tokenizers` 0.21+ does default to `onig` (C, via `onig_sys`) and `esaxx_fast` (C++, via `esaxx-rs/cpp`) — both avoidable with `default-features = false` on a *direct* dependency. But `candle-core` 0.11.0 (a dependency of `candle-transformers`, which section 6 explicitly names for the BERT architecture) declares, unconditionally on non-wasm targets: `tokenizers = { version = "0.22.0", features = ["onig"], default-features = false }`. Cargo features are additive across the whole dependency graph — a crate three levels away requesting a feature turns it on globally for that shared dependency, and nothing in a downstream crate's own `Cargo.toml` can subtract it. So depending on `candle-transformers` at all pulls in `onig`, regardless of what `crates/embed` itself requests.
+
+**Decision:** Accept `onig` as an unavoidable consequence of using `candle-transformers` (the SPEC's own named choice for BERT), per section 6's explicit hedge ("if the feature set allows" — it doesn't). Verified this stays within the spirit of "no C toolchain beyond what `rusqlite/bundled` needs": `onig_sys` compiles bundled C source via the `cc` crate (same tier as `rusqlite/bundled`'s SQLite amalgamation) rather than requiring a system `liboniguruma` via `pkg-config` or `bindgen`/`libclang` — confirmed by a clean `cargo build -p patent-embed` in this sandbox with no extra system packages installed. `esaxx-rs` (a separate, smaller native dependency of `tokenizers`) resolved to its pure-Rust path, not its C++ (`cpp` feature) one — confirmed via `cargo tree -e features -i esaxx-rs`, no `esaxx-rs feature "cpp"` edge present.
+
+`crates/embed`'s own `tokenizers` dependency is pinned to `0.22` (matching `candle-core`'s requirement) with `default-features = false`, so at least nothing *extra* gets requested on top of what `candle-core` already forces.
+
 ## 2026-09-22 — OPS v3.2 endpoint paths verified for M2
 
 **Question:** CLAUDE.md requires checking exact OPS endpoint paths/headers against the current Reference Guide before coding.
