@@ -7,6 +7,7 @@ mod library;
 mod model;
 mod platform;
 mod retrain;
+mod retrieval_worker;
 mod review;
 mod settings;
 
@@ -36,6 +37,9 @@ pub fn run() {
       commands::enable_automatic_mode,
       commands::disable_automatic_mode,
       commands::tag_eligibility,
+      commands::run_retrieval_jobs,
+      commands::retrieve_fulltext_now,
+      commands::retrieve_drawings_now,
       settings::get_settings,
       settings::update_settings,
       settings::data_directory,
@@ -49,6 +53,7 @@ pub fn run() {
       library::export_json,
       library::export_tag_list,
       library::export_documents,
+      library::bulk_retrieve,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

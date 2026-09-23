@@ -254,8 +254,9 @@ fn to_candidate(p: &Publication) -> Candidate {
 
 /// `pub_key` is `{country}{number}` with no separator (SPEC 4.2); country
 /// is always the leading alphabetic run (guaranteed by
-/// `core_lib::number::ParsedNumber::pub_key`).
-fn split_pub_key(pub_key: &str) -> (&str, &str) {
+/// `core_lib::number::ParsedNumber::pub_key`). Also used by
+/// `retrieval_worker`, which needs the same split to re-fetch biblio data.
+pub(crate) fn split_pub_key(pub_key: &str) -> (&str, &str) {
     let split_at = pub_key
         .char_indices()
         .find(|(_, c)| !c.is_ascii_alphabetic())

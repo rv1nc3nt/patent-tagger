@@ -1,7 +1,6 @@
 //! Tauri commands for the Library screen (SPEC section 8): search,
-//! similarity, and the CSV/JSON/per-tag-list/document exports it triggers.
-//! Full-text/drawings availability filters and bulk retrieval aren't
-//! included yet - they need M8's retrieval pipeline.
+//! similarity, and the CSV/JSON/per-tag-list/document exports it triggers,
+//! plus the bulk full-text/drawings retrieval action.
 
 use crate::db::Db;
 use crate::model::Model;
@@ -52,7 +51,8 @@ pub fn export_tag_list(state: State<Db>, tag_id: i64, dest_path: String) -> Resu
 }
 
 /// One folder per document under `dest_dir`, each with a `.txt` file in
-/// SPEC section 8's export format (drawings subfolders come with M8).
+/// SPEC section 8's export format and, when retrieved, a `drawings/`
+/// subfolder of PNG pages copied from the data directory.
 #[tauri::command]
 pub fn export_documents(state: State<Db>, doc_ids: Vec<i64>, dest_dir: String) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
@@ -73,9 +73,87 @@ pub fn export_documents(state: State<Db>, doc_ids: Vec<i64>, dest_dir: String) -
 
         let folder = dest_dir.join(&detail.pub_key);
         std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
-        let text = export::document_txt(&detail, &tag_names);
+
+        let fulltext_row = core_lib::fulltext::get(&conn, doc_id).map_err(|e| e.to_string())?;
+        let fulltext_export = fulltext_row.map(|f| export::DocumentExportFulltext {
+            status: f.status,
+            description: f.description,
+            claims: f.claims,
+            lang: f.lang,
+            source: f.source,
+        });
+
+        let drawings_status = core_lib::drawings::get_status(&conn, doc_id).map_err(|e| e.to_string())?;
+        let pages = core_lib::drawings::list_pages(&conn, doc_id).map_err(|e| e.to_string())?;
+        let drawings_export = drawings_status.map(|s| {
+            let mut page_paths = Vec::new();
+            if s.status == "fetched" {
+                for page in pages.iter().filter(|p| p.page >= 1) {
+                    let file_name = format!("{:03}.png", page.page);
+                    let source_path = state.data_dir.join(&page.path);
+                    let dest_path = folder.join("drawings").join(&file_name);
+                    if std::fs::create_dir_all(folder.join("drawings")).is_ok()
+                        && std::fs::copy(&source_path, &dest_path).is_ok()
+                    {
+                        page_paths.push(format!("drawings/{file_name}"));
+                    }
+                }
+            }
+            export::DocumentExportDrawings { status: s.status, page_paths, source: s.source }
+        });
+
+        let text = export::document_txt(&detail, &tag_names, fulltext_export.as_ref(), drawings_export.as_ref());
         std::fs::write(folder.join(format!("{}.txt", detail.pub_key)), text).map_err(|e| e.to_string())?;
         exported += 1;
     }
     Ok(exported)
+}
+
+/// SPEC section 8's Library "bulk action: retrieve full text or drawings
+/// for the current selection". Enqueues a job per document (skipping any
+/// already-successful ones - same rule as after-tagging enqueueing) then
+/// drains the queue once, synchronously, so the caller's promise resolves
+/// once the batch is done.
+#[tauri::command]
+pub async fn bulk_retrieve(state: State<'_, Db>, doc_ids: Vec<i64>, kind: String) -> Result<(), String> {
+    let now = crate::commands::current_timestamp();
+    {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        for doc_id in &doc_ids {
+            match kind.as_str() {
+                "fulltext" => {
+                    let already_done = core_lib::fulltext::get(&conn, *doc_id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|f| matches!(f.status.as_str(), "fetched" | "non_english_only"));
+                    if !already_done {
+                        let _ = crate::retrieval_worker::enqueue_fulltext(&conn, *doc_id, &now);
+                    }
+                }
+                "drawings" => {
+                    let already_done = core_lib::drawings::get_status(&conn, *doc_id)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|s| s.status == "fetched");
+                    if !already_done {
+                        let _ = crate::retrieval_worker::enqueue_drawings(&conn, *doc_id, &now);
+                    }
+                }
+                _ => return Err(format!("unknown retrieval kind: {kind}")),
+            }
+        }
+    }
+
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    match kind.as_str() {
+        "fulltext" => crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await,
+        "drawings" => {
+            crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await
+        }
+        _ => {}
+    }
+    Ok(())
 }

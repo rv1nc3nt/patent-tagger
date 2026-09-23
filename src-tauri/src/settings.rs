@@ -18,6 +18,10 @@ pub struct SettingsView {
     pub full_automation_enabled: bool,
     pub fulltext_policy: String,
     pub drawings_policy: String,
+    /// Consulted only when the matching policy is
+    /// `"after_tagging_selected_tags"` (SPEC 5.5).
+    pub fulltext_policy_tag_ids: Vec<i64>,
+    pub drawings_policy_tag_ids: Vec<i64>,
 }
 
 #[tauri::command]
@@ -30,6 +34,8 @@ pub fn get_settings(state: State<Db>) -> Result<SettingsView, String> {
         full_automation_enabled: settings::full_automation_enabled(&conn).map_err(|e| e.to_string())?,
         fulltext_policy: settings::fulltext_policy(&conn).map_err(|e| e.to_string())?,
         drawings_policy: settings::drawings_policy(&conn).map_err(|e| e.to_string())?,
+        fulltext_policy_tag_ids: settings::fulltext_policy_tag_ids(&conn).map_err(|e| e.to_string())?,
+        drawings_policy_tag_ids: settings::drawings_policy_tag_ids(&conn).map_err(|e| e.to_string())?,
     })
 }
 
@@ -64,6 +70,8 @@ pub fn update_settings(state: State<Db>, view: SettingsView) -> Result<(), Strin
     .map_err(|e| e.to_string())?;
     settings::set(&conn, settings::FULLTEXT_POLICY_KEY, &view.fulltext_policy).map_err(|e| e.to_string())?;
     settings::set(&conn, settings::DRAWINGS_POLICY_KEY, &view.drawings_policy).map_err(|e| e.to_string())?;
+    settings::set_fulltext_policy_tag_ids(&conn, &view.fulltext_policy_tag_ids).map_err(|e| e.to_string())?;
+    settings::set_drawings_policy_tag_ids(&conn, &view.drawings_policy_tag_ids).map_err(|e| e.to_string())?;
     Ok(())
 }
 

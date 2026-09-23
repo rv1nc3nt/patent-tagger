@@ -305,6 +305,7 @@ pub fn validate_document(
 
     let checked: HashSet<i64> = checked_tag_ids.into_iter().collect();
     labels::validate_document(&conn, doc_id, &active_tags, &checked, &now).map_err(|e| e.to_string())?;
+    enqueue_retrieval_after_tagging(&conn, doc_id, &checked, &now).map_err(|e| e.to_string())?;
 
     let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
     let mut auto_disabled_tags = Vec::new();
@@ -323,6 +324,88 @@ pub fn validate_document(
     }
 
     Ok(ValidateResult { auto_disabled_tags })
+}
+
+/// SPEC 5.5's "after tagging" retrieval policies, checked once a document
+/// is validated. Skips enqueueing when retrieval already succeeded, so
+/// re-validating a document (e.g. after a tag's definition changed) never
+/// re-does finished work.
+fn enqueue_retrieval_after_tagging(
+    conn: &Connection,
+    doc_id: i64,
+    checked_tag_ids: &HashSet<i64>,
+    now: &str,
+) -> Result<(), core_lib::storage::StorageError> {
+    use core_lib::retrieval_policy::should_retrieve_after_tagging;
+    let document_tag_ids: Vec<i64> = checked_tag_ids.iter().copied().collect();
+
+    let fulltext_policy = core_lib::settings::fulltext_policy(conn)?;
+    let fulltext_policy_tag_ids = core_lib::settings::fulltext_policy_tag_ids(conn)?;
+    let fulltext_already_done = core_lib::fulltext::get(conn, doc_id)?
+        .is_some_and(|f| matches!(f.status.as_str(), "fetched" | "non_english_only"));
+    if !fulltext_already_done
+        && should_retrieve_after_tagging(&fulltext_policy, &fulltext_policy_tag_ids, &document_tag_ids)
+    {
+        crate::retrieval_worker::enqueue_fulltext(conn, doc_id, now)?;
+    }
+
+    let drawings_policy = core_lib::settings::drawings_policy(conn)?;
+    let drawings_policy_tag_ids = core_lib::settings::drawings_policy_tag_ids(conn)?;
+    let drawings_already_done = core_lib::drawings::get_status(conn, doc_id)?
+        .is_some_and(|d| d.status == "fetched");
+    if !drawings_already_done
+        && should_retrieve_after_tagging(&drawings_policy, &drawings_policy_tag_ids, &document_tag_ids)
+    {
+        crate::retrieval_worker::enqueue_drawings(conn, doc_id, now)?;
+    }
+    Ok(())
+}
+
+/// Drains any pending `fulltext_retrieval`/`drawings_retrieval` jobs (SPEC
+/// 5.5) - both the ones enqueued by `enqueue_retrieval_after_tagging` and
+/// any left over from an interrupted previous run. Lower priority than
+/// imports (SPEC 5.4): callers run `run_import_jobs` first.
+#[tauri::command]
+pub async fn run_retrieval_jobs(state: State<'_, Db>) -> Result<(), String> {
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await;
+    crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await;
+    Ok(())
+}
+
+/// The Description/Claims tabs' and Drawings tab's "retrieve now" button
+/// (SPEC section 8), for the "on demand" retrieval policy.
+#[tauri::command]
+pub async fn retrieve_fulltext_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
+    {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        crate::retrieval_worker::enqueue_fulltext(&conn, doc_id, &current_timestamp())
+            .map_err(|e| e.to_string())?;
+    }
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
+    {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        crate::retrieval_worker::enqueue_drawings(&conn, doc_id, &current_timestamp())
+            .map_err(|e| e.to_string())?;
+    }
+    let creds = crate::platform::credentials::load(&state.data_dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("no OPS credentials saved yet")?;
+    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await;
+    Ok(())
 }
 
 #[tauri::command]

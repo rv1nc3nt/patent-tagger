@@ -112,6 +112,12 @@ pub struct DocumentView {
     #[serde(flatten)]
     pub detail: documents::DocumentDetail,
     pub tags: Vec<TagScore>,
+    /// `None` when full text was never even attempted (SPEC 5.5's "never"
+    /// policy and nobody has asked on demand yet) - the Description/Claims
+    /// tabs only appear "when retrieved" (SPEC section 8).
+    pub fulltext: Option<core_lib::fulltext::FulltextRow>,
+    pub drawings_status: Option<core_lib::drawings::DrawingsStatusRow>,
+    pub drawing_pages: Vec<core_lib::drawings::DrawingPage>,
 }
 
 pub fn document_view(
@@ -124,7 +130,10 @@ pub fn document_view(
     };
     let active_tags = core_lib::tags::list_active(conn)?;
     let tags = score_document(conn, embedder, &active_tags, doc_id)?;
-    Ok(Some(DocumentView { detail, tags }))
+    let fulltext = core_lib::fulltext::get(conn, doc_id)?;
+    let drawings_status = core_lib::drawings::get_status(conn, doc_id)?;
+    let drawing_pages = core_lib::drawings::list_pages(conn, doc_id)?;
+    Ok(Some(DocumentView { detail, tags, fulltext, drawings_status, drawing_pages }))
 }
 
 /// SPEC section 8: the queue can be ordered by import order (the default,
