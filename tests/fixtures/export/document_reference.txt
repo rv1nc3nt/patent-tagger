@@ -1,0 +1,19 @@
+Publication: EP1234567 (A1, B1)
+Title: Apparatus for manufacturing green bricks
+Applicants: ACME Corp; Foo Industries
+Publication date: 2020-05-14
+CPC: B28B1/29, B28B7/00
+Tags: Battery; Ceramics
+Sources: abstract EP.1234567.A1; full text EP.1234567.B1; drawings EP.1234567.A1
+
+===== ABSTRACT =====
+An apparatus for manufacturing green bricks from clay.
+===== DESCRIPTION =====
+[0001] The invention relates to an apparatus for manufacturing green bricks.
+[0002] Further details follow.
+===== CLAIMS =====
+1. Apparatus for manufacturing green bricks.
+2. Apparatus as claimed in claim 1.
+===== DRAWINGS =====
+drawings/001.png
+drawings/002.png

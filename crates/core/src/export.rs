@@ -333,6 +333,54 @@ mod tests {
         assert!(text.contains("===== CLAIMS =====\nClaims not available for this publication.\n"));
     }
 
+    /// SPEC 10's M8 acceptance criterion: "exported .txt matches a
+    /// reference file" - a fully-populated document (title, abstract,
+    /// description, claims and drawings all present) compared byte-for-byte
+    /// against `tests/fixtures/export/document_reference.txt`.
+    #[test]
+    fn document_txt_matches_the_reference_file_for_a_fully_populated_document() {
+        let detail = documents::DocumentDetail {
+            id: 1,
+            pub_key: "EP1234567".to_string(),
+            title: Some("Apparatus for manufacturing green bricks".to_string()),
+            abstract_text: Some("An apparatus for manufacturing green bricks from clay.".to_string()),
+            abstract_source: Some("EP.1234567.A1".to_string()),
+            applicants: vec!["ACME Corp".to_string(), "Foo Industries".to_string()],
+            publication_date: Some("2020-05-14".to_string()),
+            cpc: vec!["B28B1/29".to_string(), "B28B7/00".to_string()],
+            kind_codes: vec!["A1".to_string(), "B1".to_string()],
+            ..Default::default()
+        };
+        let fulltext = DocumentExportFulltext {
+            status: "fetched".to_string(),
+            description: Some(
+                "[0001] The invention relates to an apparatus for manufacturing green bricks.\n[0002] Further details follow.".to_string(),
+            ),
+            claims: Some("1. Apparatus for manufacturing green bricks.\n2. Apparatus as claimed in claim 1.".to_string()),
+            lang: Some("EN".to_string()),
+            source: Some("EP.1234567.B1".to_string()),
+        };
+        let drawings = DocumentExportDrawings {
+            status: "fetched".to_string(),
+            page_paths: vec!["drawings/001.png".to_string(), "drawings/002.png".to_string()],
+            source: Some("EP.1234567.A1".to_string()),
+        };
+
+        let text = document_txt(
+            &detail,
+            &["Battery".to_string(), "Ceramics".to_string()],
+            Some(&fulltext),
+            Some(&drawings),
+        );
+
+        let reference = std::fs::read_to_string(format!(
+            "{}/../../tests/fixtures/export/document_reference.txt",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("reading the reference export file");
+        assert_eq!(text, reference);
+    }
+
     #[test]
     fn document_txt_states_not_available_distinctly_from_not_retrieved() {
         let fulltext = DocumentExportFulltext { status: "not_available".to_string(), ..Default::default() };
