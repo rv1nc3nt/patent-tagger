@@ -116,6 +116,30 @@ pub fn calibrate_threshold(
     Ok(calibrate_from_items(&items, target_precision))
 }
 
+/// SPEC 7.6: "the highest score such that, on prequential data, the
+/// positives scoring below it do not exceed 1 - target recall" - restated
+/// via `precision_recall_at`'s own recall (fraction of actual positives at
+/// or above a threshold): the highest threshold whose recall still meets
+/// `target_recall`, since recall only falls (or stays flat) as the
+/// threshold rises. `None` when the window has no actual positives at all
+/// (recall is undefined then - nothing to calibrate against) or when even
+/// threshold 0.0 doesn't reach `target_recall`.
+fn calibrate_neg_threshold_from_items(items: &[ScoredLabel], target_recall: f32) -> Option<f32> {
+    (0..=100)
+        .rev()
+        .map(|step| step as f32 * 0.01)
+        .find(|&threshold| precision_recall_at(items, threshold).1.is_some_and(|r| r >= target_recall))
+}
+
+pub fn calibrate_neg_threshold(
+    conn: &Connection,
+    tag_id: i64,
+    target_recall: f32,
+) -> Result<Option<f32>, StorageError> {
+    let items = windowed_scored_labels(conn, tag_id)?;
+    Ok(calibrate_neg_threshold_from_items(&items, target_recall))
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct Eligibility {
     pub eligible: bool,
@@ -284,6 +308,45 @@ mod tests {
         validated_doc_with_prediction(&conn, "EPFP00001", &tag, 0.9, false);
 
         assert_eq!(calibrate_threshold(&conn, tag_id, 0.95).unwrap(), None);
+    }
+
+    #[test]
+    fn calibrate_neg_threshold_finds_the_highest_threshold_reaching_target_recall() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+
+        // 18 positives at 0.9, 2 positives at 0.15 (a false negative risk
+        // at low thresholds), plus negatives spread out. At neg_threshold
+        // 0.15, both low-scoring positives are still counted (score >=
+        // threshold), so recall = 1.0; at 0.16, they'd be missed (recall =
+        // 18/20 = 0.9, below a 0.95 target) - so 0.15 is the highest
+        // threshold that still reaches target recall.
+        for i in 0..18 {
+            validated_doc_with_prediction(&conn, &format!("EPPOS{i:04}"), &tag, 0.9, true);
+        }
+        for i in 0..2 {
+            validated_doc_with_prediction(&conn, &format!("EPLOWPOS{i:04}"), &tag, 0.15, true);
+        }
+        for i in 0..10 {
+            validated_doc_with_prediction(&conn, &format!("EPNEG{i:04}"), &tag, 0.05, false);
+        }
+
+        let neg_threshold = calibrate_neg_threshold(&conn, tag_id, 0.95).unwrap().unwrap();
+        assert!((neg_threshold - 0.15).abs() < 1e-6, "expected 0.15, got {neg_threshold}");
+
+        let (_, recall) = precision_recall_at(&windowed_scored_labels(&conn, tag_id).unwrap(), neg_threshold);
+        assert_eq!(recall, Some(1.0));
+    }
+
+    #[test]
+    fn calibrate_neg_threshold_is_none_without_any_positives() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+        validated_doc_with_prediction(&conn, "EPNEG0001", &tag, 0.1, false);
+
+        assert_eq!(calibrate_neg_threshold(&conn, tag_id, 0.95).unwrap(), None);
     }
 
     #[test]

@@ -8,10 +8,9 @@
 //! section 10's M5 acceptance criterion is this outperformance "once data
 //! is sufficient" - demonstrated here at n=100/class vs. n=10/class.
 
-use core_lib::classifier;
 use core_lib::labels::LabelState;
-use core_lib::scoring;
-use std::collections::HashMap;
+use core_lib::{classifier, documents, labels, predictions, scoring, storage, tags};
+use std::collections::{HashMap, HashSet};
 
 const DIM: usize = 384;
 const SIGNAL_DIMS: usize = 4;
@@ -103,4 +102,51 @@ fn logistic_regression_outperforms_knn_once_data_is_sufficient() {
         "expected LR to clearly outperform k-NN with sufficient data: lr={large_lr:.2}, knn={large_knn:.2}"
     );
     assert!(large_lr > 0.9, "LR should be quite accurate with 100 samples/class: {large_lr:.2}");
+}
+
+/// SPEC 10's M9 acceptance criterion: "neg_threshold calibration tested on
+/// synthetic data" (SPEC 7.6's "confident absence" threshold). Trains an
+/// LR classifier on clustered synthetic data, scores a calibration set,
+/// records those scores/labels through the real `predictions`/`labels`
+/// tables (exactly as `retrain_eligible_tags` would), calibrates a
+/// `neg_threshold` for a target recall, then verifies on a disjoint
+/// held-out set that scoring below that threshold really does miss no
+/// more than the tolerated share of true positives.
+#[test]
+fn neg_threshold_calibration_achieves_target_recall_on_held_out_data() {
+    let conn = storage::open_in_memory().expect("in-memory db");
+    let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+    let tag = tags::get(&conn, tag_id).unwrap().unwrap();
+
+    let train = dataset(100, 10_000);
+    let clf = classifier::train(&train, classifier::default_l2_lambda()).expect("should train");
+
+    // The calibration set becomes this tag's prequential window.
+    let calibration = dataset(100, 20_000);
+    for (i, (x, is_pos)) in calibration.iter().enumerate() {
+        let pub_key = format!("EP{i:07}");
+        documents::insert_pending(&conn, &pub_key, &pub_key, "2026-01-01T00:00:00Z").unwrap();
+        let doc = documents::find_by_pub_key(&conn, &pub_key).unwrap().unwrap();
+        let score = clf.predict(x);
+        predictions::record(&conn, doc.id, tag_id, "model@v1", score, score >= 0.5, "2026-01-01T00:00:00Z").unwrap();
+        let checked: HashSet<i64> = if *is_pos { [tag_id].into_iter().collect() } else { HashSet::new() };
+        labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &checked, "2026-01-01T00:00:00Z")
+            .unwrap();
+    }
+
+    let target_recall = 0.95;
+    let neg_threshold = predictions::calibrate_neg_threshold(&conn, tag_id, target_recall)
+        .unwrap()
+        .expect("should find a calibratable neg_threshold on well-separated clustered data");
+
+    let held_out = dataset(200, 30_000);
+    let positives: Vec<&Vec<f32>> = held_out.iter().filter(|(_, is_pos)| *is_pos).map(|(x, _)| x).collect();
+    let missed = positives.iter().filter(|x| clf.predict(x) < neg_threshold).count();
+    let held_out_recall = 1.0 - (missed as f32 / positives.len() as f32);
+
+    println!("neg_threshold={neg_threshold:.2}, held-out recall={held_out_recall:.3}");
+    assert!(
+        held_out_recall >= target_recall - 0.05,
+        "expected held-out recall close to the {target_recall} target, got {held_out_recall:.3}"
+    );
 }

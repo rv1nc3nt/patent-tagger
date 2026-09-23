@@ -68,7 +68,6 @@ pub fn validate_document(
 /// conditional `WHERE labels.source != 'human'` on the upsert), and skips
 /// `label_history` when that happens, since nothing actually changed.
 /// Returns whether it actually wrote anything.
-#[allow(clippy::too_many_arguments)]
 pub fn write_automatic_label(
     conn: &Connection,
     doc_id: i64,
@@ -78,22 +77,54 @@ pub fn write_automatic_label(
     tag_version: i64,
     now: &str,
 ) -> Result<bool, StorageError> {
+    write_automatic(conn, doc_id, tag_id, LabelState::Pos, confidence, model_version, tag_version, now)
+}
+
+/// Writes an automatic `neg` label (SPEC 7.6: "confident absence" - a
+/// score below `neg_threshold`). Only ever called under full automation
+/// (SPEC 7.5: "outside full automation...the system never writes
+/// automatic negatives") - that gate is the caller's job, same as
+/// `write_automatic_label`'s pos side never checking a tag's automatic
+/// mode itself.
+pub fn write_automatic_neg_label(
+    conn: &Connection,
+    doc_id: i64,
+    tag_id: i64,
+    confidence: f32,
+    model_version: &str,
+    tag_version: i64,
+    now: &str,
+) -> Result<bool, StorageError> {
+    write_automatic(conn, doc_id, tag_id, LabelState::Neg, confidence, model_version, tag_version, now)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_automatic(
+    conn: &Connection,
+    doc_id: i64,
+    tag_id: i64,
+    state: LabelState,
+    confidence: f32,
+    model_version: &str,
+    tag_version: i64,
+    now: &str,
+) -> Result<bool, StorageError> {
     let changed = conn.execute(
         "INSERT INTO labels (doc_id, tag_id, state, source, confidence, model_version, tag_version, created_at)
-         VALUES (?1, ?2, 'pos', 'auto', ?3, ?4, ?5, ?6)
+         VALUES (?1, ?2, ?3, 'auto', ?4, ?5, ?6, ?7)
          ON CONFLICT (doc_id, tag_id) DO UPDATE SET
             state = excluded.state, source = excluded.source, confidence = excluded.confidence,
             model_version = excluded.model_version, tag_version = excluded.tag_version,
             created_at = excluded.created_at
          WHERE labels.source != 'human'",
-        params![doc_id, tag_id, confidence, model_version, tag_version, now],
+        params![doc_id, tag_id, state.as_str(), confidence, model_version, tag_version, now],
     )? > 0;
 
     if changed {
         conn.execute(
             "INSERT INTO label_history (doc_id, tag_id, state, source, confidence, model_version, tag_version, created_at)
-             VALUES (?1, ?2, 'pos', 'auto', ?3, ?4, ?5, ?6)",
-            params![doc_id, tag_id, confidence, model_version, tag_version, now],
+             VALUES (?1, ?2, ?3, 'auto', ?4, ?5, ?6, ?7)",
+            params![doc_id, tag_id, state.as_str(), confidence, model_version, tag_version, now],
         )?;
     }
     Ok(changed)
@@ -318,6 +349,26 @@ mod tests {
         assert_eq!(state, "pos");
         assert_eq!(source, "auto");
         assert!((confidence - 0.87).abs() < 1e-6);
+    }
+
+    #[test]
+    fn write_automatic_neg_label_sets_neg_with_confidence_and_model_version() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, _solar) = setup(&conn);
+
+        let changed =
+            write_automatic_neg_label(&conn, doc_id, battery.id, 0.92, "model@v1", 1, NOW).unwrap();
+        assert!(changed);
+
+        let (state, source): (String, String) = conn
+            .query_row(
+                "SELECT state, source FROM labels WHERE doc_id = ?1 AND tag_id = ?2",
+                params![doc_id, battery.id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "neg");
+        assert_eq!(source, "auto");
     }
 
     #[test]

@@ -6,6 +6,7 @@ pub mod documents;
 pub mod drawings;
 pub mod embeddings;
 pub mod export;
+pub mod full_automation;
 pub mod fulltext;
 pub mod jobs;
 pub mod labels;

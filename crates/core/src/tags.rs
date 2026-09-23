@@ -18,6 +18,11 @@ pub struct TagRow {
     /// calibration has found one; `None` falls back to 0.5 everywhere it's
     /// used.
     pub threshold: Option<f32>,
+    /// SPEC 7.6: the calibrated "confident absence" threshold - a score
+    /// below this means confidently absent. `None` until calibrated;
+    /// full automation can never decide this tag's negative side until it
+    /// exists (see `full_automation::decide_tag`).
+    pub neg_threshold: Option<f32>,
     /// SPEC 7.5: "the user enables automatic mode per tag explicitly; it is
     /// never enabled by default."
     pub auto_enabled: bool,
@@ -79,7 +84,8 @@ pub fn create(
     Ok(conn.last_insert_rowid())
 }
 
-const SELECT_COLUMNS: &str = "id, name, definition, color, hotkey, version, archived, threshold, auto_enabled";
+const SELECT_COLUMNS: &str =
+    "id, name, definition, color, hotkey, version, archived, threshold, neg_threshold, auto_enabled";
 
 pub fn list_active(conn: &Connection) -> Result<Vec<TagRow>, StorageError> {
     let mut stmt =
@@ -105,6 +111,11 @@ pub fn archive(conn: &Connection, id: i64) -> Result<(), StorageError> {
 
 pub fn set_threshold(conn: &Connection, tag_id: i64, threshold: Option<f32>) -> Result<(), StorageError> {
     conn.execute("UPDATE tags SET threshold = ?1 WHERE id = ?2", params![threshold, tag_id])?;
+    Ok(())
+}
+
+pub fn set_neg_threshold(conn: &Connection, tag_id: i64, neg_threshold: Option<f32>) -> Result<(), StorageError> {
+    conn.execute("UPDATE tags SET neg_threshold = ?1 WHERE id = ?2", params![neg_threshold, tag_id])?;
     Ok(())
 }
 
@@ -140,7 +151,8 @@ fn row_to_tag(row: &rusqlite::Row) -> rusqlite::Result<TagRow> {
         version: row.get(5)?,
         archived: row.get::<_, i64>(6)? != 0,
         threshold: row.get(7)?,
-        auto_enabled: row.get::<_, i64>(8)? != 0,
+        neg_threshold: row.get(8)?,
+        auto_enabled: row.get::<_, i64>(9)? != 0,
     })
 }
 
@@ -198,6 +210,7 @@ mod tests {
         let id = create(&conn, "Battery", "Relates to batteries", None, None, NOW).unwrap();
         let tag = get(&conn, id).unwrap().unwrap();
         assert_eq!(tag.threshold, None);
+        assert_eq!(tag.neg_threshold, None);
         assert!(!tag.auto_enabled);
     }
 
@@ -207,10 +220,12 @@ mod tests {
         let id = create(&conn, "Battery", "Relates to batteries", None, None, NOW).unwrap();
 
         set_threshold(&conn, id, Some(0.73)).unwrap();
+        set_neg_threshold(&conn, id, Some(0.12)).unwrap();
         set_auto_enabled(&conn, id, true).unwrap();
 
         let tag = get(&conn, id).unwrap().unwrap();
         assert_eq!(tag.threshold, Some(0.73));
+        assert_eq!(tag.neg_threshold, Some(0.12));
         assert!(tag.auto_enabled);
     }
 
