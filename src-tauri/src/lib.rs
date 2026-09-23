@@ -40,6 +40,7 @@ pub fn run() {
       commands::run_retrieval_jobs,
       commands::retrieve_fulltext_now,
       commands::retrieve_drawings_now,
+      commands::read_drawing_page,
       settings::get_settings,
       settings::update_settings,
       settings::data_directory,

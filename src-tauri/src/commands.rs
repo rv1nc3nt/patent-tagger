@@ -408,6 +408,14 @@ pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<
     Ok(())
 }
 
+/// The Drawings tab's page images (SPEC section 8): `page` is 1-based for
+/// a real page, or `0` for the `FirstPageClipping` thumbnail.
+#[tauri::command]
+pub fn read_drawing_page(state: State<Db>, doc_id: i64, page: i64) -> Result<Vec<u8>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    crate::review::read_drawing_page(&conn, &state.data_dir, doc_id, page).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;

@@ -136,6 +136,27 @@ pub fn document_view(
     Ok(Some(DocumentView { detail, tags, fulltext, drawings_status, drawing_pages }))
 }
 
+/// Reads one converted drawing page (or the `FirstPageClipping` thumbnail
+/// at page 0) off disk for display in the webview. Returned as raw bytes
+/// rather than a file path/URL, since the data directory isn't exposed
+/// through the asset protocol (SPEC 4.2: the app "writes nowhere else",
+/// and scoping the asset protocol to a data directory that moves with
+/// portable mode adds complexity this doesn't need yet) - the frontend
+/// builds a `Blob` from the bytes directly.
+pub fn read_drawing_page(
+    conn: &Connection,
+    data_dir: &std::path::Path,
+    doc_id: i64,
+    page: i64,
+) -> anyhow::Result<Vec<u8>> {
+    let pages = core_lib::drawings::list_pages(conn, doc_id)?;
+    let page_row = pages
+        .into_iter()
+        .find(|p| p.page == page)
+        .ok_or_else(|| anyhow::anyhow!("no drawing page {page} for document {doc_id}"))?;
+    Ok(std::fs::read(data_dir.join(&page_row.path))?)
+}
+
 /// SPEC section 8: the queue can be ordered by import order (the default,
 /// `documents::list_queue`'s own order) or "most uncertain first (scores
 /// closest to their thresholds)" - now meaningful once M6 gives every tag

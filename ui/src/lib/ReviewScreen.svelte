@@ -2,7 +2,10 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import {
     documentDetail,
+    drawingPageUrl,
     reviewQueue,
+    retrieveDrawingsNow,
+    retrieveFulltextNow,
     skipDocument,
     validateDocument,
     type DocumentView,
@@ -10,6 +13,9 @@
     type QueueOrdering,
   } from "./api";
   import TagsPanel from "./TagsPanel.svelte";
+  import DrawingPage from "./DrawingPage.svelte";
+
+  type DetailTab = "abstract" | "description" | "claims" | "drawings";
 
   let queue = $state<QueueEntry[]>([]);
   let index = $state(0);
@@ -20,6 +26,41 @@
   let notice = $state("");
   let ordering = $state<QueueOrdering>("import");
   let filterInput = $state<HTMLInputElement | undefined>(undefined);
+  let activeTab = $state<DetailTab>("abstract");
+  let retrievingFulltext = $state(false);
+  let retrievingDrawings = $state(false);
+
+  const fulltextAvailable = $derived(
+    doc?.fulltext?.status === "fetched" || doc?.fulltext?.status === "non_english_only",
+  );
+
+  async function handleRetrieveFulltext() {
+    if (!doc) return;
+    retrievingFulltext = true;
+    error = "";
+    try {
+      await retrieveFulltextNow(doc.id);
+      await loadCurrent();
+    } catch (err) {
+      error = String(err);
+    } finally {
+      retrievingFulltext = false;
+    }
+  }
+
+  async function handleRetrieveDrawings() {
+    if (!doc) return;
+    retrievingDrawings = true;
+    error = "";
+    try {
+      await retrieveDrawingsNow(doc.id);
+      await loadCurrent();
+    } catch (err) {
+      error = String(err);
+    } finally {
+      retrievingDrawings = false;
+    }
+  }
 
   const visibleTags = $derived(
     doc?.tags.filter((t) => t.name.toLowerCase().includes(tagFilter.toLowerCase())) ?? [],
@@ -50,6 +91,7 @@
     try {
       doc = await documentDetail(queue[index].id);
       checked = new Set(doc?.tags.filter((t) => t.suggested).map((t) => t.tag_id) ?? []);
+      activeTab = "abstract";
     } catch (err) {
       error = String(err);
     }
@@ -197,7 +239,72 @@
           {#if espacenetLink}
             <button class="link" onclick={() => openUrl(espacenetLink)}>Open in Espacenet</button>
           {/if}
-          <p class="abstract">{doc.abstract_text}</p>
+
+          <div class="tab-bar">
+            <button class:active={activeTab === "abstract"} onclick={() => (activeTab = "abstract")}>
+              Abstract
+            </button>
+            {#if fulltextAvailable && doc.fulltext?.description}
+              <button class:active={activeTab === "description"} onclick={() => (activeTab = "description")}>
+                Description
+              </button>
+            {/if}
+            {#if fulltextAvailable && doc.fulltext?.claims}
+              <button class:active={activeTab === "claims"} onclick={() => (activeTab = "claims")}>
+                Claims
+              </button>
+            {/if}
+            <button class:active={activeTab === "drawings"} onclick={() => (activeTab = "drawings")}>
+              Drawings
+            </button>
+          </div>
+
+          {#if activeTab === "abstract"}
+            <p class="abstract">{doc.abstract_text}</p>
+          {:else if activeTab === "description"}
+            {#if doc.fulltext?.status === "non_english_only"}
+              <p class="notice">Non-English text (language: {doc.fulltext.lang})</p>
+            {/if}
+            <p class="source-note">Source: {doc.fulltext?.source}</p>
+            <pre class="fulltext">{doc.fulltext?.description}</pre>
+          {:else if activeTab === "claims"}
+            {#if doc.fulltext?.status === "non_english_only"}
+              <p class="notice">Non-English text (language: {doc.fulltext.lang})</p>
+            {/if}
+            <p class="source-note">Source: {doc.fulltext?.source}</p>
+            <pre class="fulltext">{doc.fulltext?.claims}</pre>
+          {:else if activeTab === "drawings"}
+            <div class="drawings-tab">
+              {#if doc.drawings_status?.status === "fetched"}
+                <p class="source-note">
+                  Source: {doc.drawings_status.source} · {doc.drawings_status.page_count} page(s)
+                </p>
+                <div class="thumbnails">
+                  {#each doc.drawing_pages.filter((p) => p.page >= 1) as page (page.page)}
+                    <DrawingPage docId={doc.id} page={page.page} />
+                  {/each}
+                </div>
+              {:else if doc.drawings_status?.status === "not_available"}
+                <p class="meta">This publication has no drawings.</p>
+              {:else if doc.drawings_status?.status === "error"}
+                <p class="error-banner">Drawings retrieval failed.</p>
+                <button onclick={handleRetrieveDrawings} disabled={retrievingDrawings}>
+                  {retrievingDrawings ? "Retrieving…" : "Retry"}
+                </button>
+              {:else}
+                <p class="meta">Drawings not retrieved.</p>
+                <button onclick={handleRetrieveDrawings} disabled={retrievingDrawings}>
+                  {retrievingDrawings ? "Retrieving…" : "Retrieve now"}
+                </button>
+              {/if}
+            </div>
+          {/if}
+
+          {#if activeTab === "abstract" && !fulltextAvailable}
+            <button class="link" onclick={handleRetrieveFulltext} disabled={retrievingFulltext}>
+              {retrievingFulltext ? "Retrieving full text…" : "Retrieve full text now"}
+            </button>
+          {/if}
         </section>
 
         <section class="tags-pane">
@@ -314,6 +421,48 @@
   }
   .link {
     font-size: 0.8rem;
+  }
+  .tab-bar {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-bar button {
+    border: none;
+    background: transparent;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tab-bar button.active {
+    color: var(--fg);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+  .source-note {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.5rem 0 0.25rem;
+  }
+  .fulltext {
+    white-space: pre-wrap;
+    font-family: inherit;
+    line-height: 1.5;
+    max-height: 40vh;
+    overflow-y: auto;
+    margin: 0;
+  }
+  .drawings-tab {
+    margin-top: 0.5rem;
+  }
+  .thumbnails {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-height: 40vh;
+    overflow-y: auto;
   }
   .tags-pane .filter {
     width: 100%;

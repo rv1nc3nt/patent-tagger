@@ -86,8 +86,63 @@ export interface TagScore {
   suggested: boolean;
 }
 
+export type FulltextStatus = "pending" | "fetched" | "not_available" | "non_english_only" | "error";
+
+export interface FulltextRow {
+  doc_id: number;
+  description: string | null;
+  claims: string | null;
+  lang: string | null;
+  source: string | null;
+  status: FulltextStatus;
+  fetched_at: string | null;
+}
+
+export type DrawingsStatus = "pending" | "fetched" | "not_available" | "error";
+
+export interface DrawingsStatusRow {
+  doc_id: number;
+  status: DrawingsStatus;
+  page_count: number | null;
+  source: string | null;
+  updated_at: string | null;
+}
+
+export interface DrawingPage {
+  doc_id: number;
+  page: number;
+  source: string | null;
+  path: string;
+  width: number | null;
+  height: number | null;
+  fetched_at: string | null;
+}
+
 export interface DocumentView extends DocumentDetail {
   tags: TagScore[];
+  fulltext: FulltextRow | null;
+  drawings_status: DrawingsStatusRow | null;
+  drawing_pages: DrawingPage[];
+}
+
+export function retrieveFulltextNow(docId: number): Promise<void> {
+  return invoke("retrieve_fulltext_now", { docId });
+}
+
+export function retrieveDrawingsNow(docId: number): Promise<void> {
+  return invoke("retrieve_drawings_now", { docId });
+}
+
+export function runRetrievalJobs(): Promise<void> {
+  return invoke("run_retrieval_jobs");
+}
+
+/// `page` is 1-based for a real page, or 0 for the `FirstPageClipping`
+/// thumbnail. Returns an object URL the caller must revoke when done.
+export async function drawingPageUrl(docId: number, page: number): Promise<string> {
+  const bytes = await invoke<number[]>("read_drawing_page", { docId, page });
+  const blob = new Blob([new Uint8Array(bytes)], { type: "image/png" });
+  return URL.createObjectURL(blob);
 }
 
 export function listTags(): Promise<TagRow[]> {
@@ -172,13 +227,17 @@ export function disableAutomaticMode(tagId: number): Promise<void> {
   return invoke("disable_automatic_mode", { tagId });
 }
 
+export type RetrievalPolicy = "never" | "on_demand" | "after_tagging_all" | "after_tagging_selected_tags";
+
 export interface SettingsView {
   target_precision: number;
   target_recall: number;
   audit_rate: number;
   full_automation_enabled: boolean;
-  fulltext_policy: string;
-  drawings_policy: string;
+  fulltext_policy: RetrievalPolicy;
+  drawings_policy: RetrievalPolicy;
+  fulltext_policy_tag_ids: number[];
+  drawings_policy_tag_ids: number[];
 }
 
 export function getSettings(): Promise<SettingsView> {
@@ -215,6 +274,13 @@ export interface LibraryFilters {
   exclude_tag_ids: number[];
   label_source: string | null;
   review_state: string | null;
+  /// `"available" | "unavailable"`.
+  fulltext_availability: string | null;
+  drawings_availability: string | null;
+}
+
+export function bulkRetrieve(docIds: number[], kind: "fulltext" | "drawings"): Promise<void> {
+  return invoke("bulk_retrieve", { docIds, kind });
 }
 
 export interface LibraryRow {
@@ -223,6 +289,7 @@ export interface LibraryRow {
   title: string | null;
   review_state: string;
   tags: string[];
+  has_drawings: boolean;
 }
 
 export function librarySearch(filters: LibraryFilters): Promise<LibraryRow[]> {

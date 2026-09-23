@@ -39,6 +39,9 @@ pub struct LibraryRow {
     pub title: Option<String>,
     pub review_state: String,
     pub tags: Vec<String>,
+    /// SPEC section 8: "table view with drawing thumbnails" - the
+    /// `FirstPageClipping` thumbnail is available at page 0 when true.
+    pub has_drawings: bool,
 }
 
 /// Applies `filters` and returns matching documents, newest first. The
@@ -50,7 +53,9 @@ pub struct LibraryRow {
 /// targets, and sidesteps building a variable-length `IN (...)` list.
 pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<LibraryRow>, StorageError> {
     let mut sql = String::from(
-        "SELECT DISTINCT d.id, d.pub_key, d.title, d.review_state FROM documents d",
+        "SELECT DISTINCT d.id, d.pub_key, d.title, d.review_state,
+                EXISTS (SELECT 1 FROM drawings_status ds3 WHERE ds3.doc_id = d.id AND ds3.status = 'fetched')
+         FROM documents d",
     );
     let mut conditions: Vec<String> = vec!["d.fetch_status = 'fetched'".to_string()];
     // Bound in the same order the `?N` placeholders below are assigned -
@@ -96,9 +101,9 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
     sql.push_str(" ORDER BY d.id DESC");
 
     let mut stmt = conn.prepare(&sql)?;
-    let mut rows: Vec<(i64, String, Option<String>, String)> = stmt
+    let mut rows: Vec<(i64, String, Option<String>, String, bool)> = stmt
         .query_map(rusqlite::params_from_iter(bind_values.iter()), |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -110,7 +115,7 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
         conn.prepare("SELECT tag_id FROM labels WHERE doc_id = ?1 AND state = 'pos'")?;
 
     let mut result = Vec::new();
-    for (id, pub_key, title, review_state) in rows.drain(..) {
+    for (id, pub_key, title, review_state, has_drawings) in rows.drain(..) {
         let pos_tag_ids: std::collections::HashSet<i64> = pos_tag_ids_stmt
             .query_map(params![id], |row| row.get::<_, i64>(0))?
             .collect::<Result<_, _>>()?;
@@ -125,7 +130,7 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
         let tags = tag_stmt
             .query_map(params![id], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
-        result.push(LibraryRow { id, pub_key, title, review_state, tags });
+        result.push(LibraryRow { id, pub_key, title, review_state, tags, has_drawings });
     }
     Ok(result)
 }
@@ -274,6 +279,20 @@ mod tests {
         .unwrap();
         assert_eq!(unavailable.len(), 1);
         assert_eq!(unavailable[0].pub_key, "EP2222222");
+    }
+
+    #[test]
+    fn search_reports_has_drawings_per_row() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let with_drawings = fetched_doc(&conn, "EP1111111", "A", "a");
+        fetched_doc(&conn, "EP2222222", "B", "b");
+        crate::drawings::store_fetched_status(&conn, with_drawings, 1, "EP.1.A1", NOW).unwrap();
+
+        let rows = search(&conn, &LibraryFilters::default()).unwrap();
+        let with = rows.iter().find(|r| r.pub_key == "EP1111111").unwrap();
+        let without = rows.iter().find(|r| r.pub_key == "EP2222222").unwrap();
+        assert!(with.has_drawings);
+        assert!(!without.has_drawings);
     }
 
     #[test]

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
   import {
+    bulkRetrieve,
     exportCsv,
     exportDocuments,
     exportJson,
@@ -12,6 +13,7 @@
     type SimilarDocument,
     type TagRow,
   } from "./api";
+  import DrawingPage from "./DrawingPage.svelte";
 
   let tags = $state<TagRow[]>([]);
   let rows = $state<LibraryRow[]>([]);
@@ -20,11 +22,14 @@
   let excludeTagIds = $state<Set<number>>(new Set());
   let labelSource = $state<string>("");
   let reviewState = $state<string>("");
+  let fulltextAvailability = $state<string>("");
+  let drawingsAvailability = $state<string>("");
   let selected = $state<Set<number>>(new Set());
   let similarFor = $state<number | null>(null);
   let similarResults = $state<SimilarDocument[]>([]);
   let status = $state("");
   let error = $state("");
+  let retrieving = $state(false);
 
   async function loadTags() {
     tags = await listTags();
@@ -39,6 +44,8 @@
         exclude_tag_ids: Array.from(excludeTagIds),
         label_source: labelSource || null,
         review_state: reviewState || null,
+        fulltext_availability: fulltextAvailability || null,
+        drawings_availability: drawingsAvailability || null,
       });
       selected = new Set();
     } catch (err) {
@@ -113,6 +120,22 @@
     }
   }
 
+  async function handleBulkRetrieve(kind: "fulltext" | "drawings") {
+    if (selected.size === 0) return;
+    retrieving = true;
+    error = "";
+    status = "";
+    try {
+      await bulkRetrieve(Array.from(selected), kind);
+      status = `Retrieved ${kind === "fulltext" ? "full text" : "drawings"} for ${selected.size} document(s).`;
+      await runSearch();
+    } catch (err) {
+      error = String(err);
+    } finally {
+      retrieving = false;
+    }
+  }
+
   $effect(() => {
     loadTags();
     runSearch();
@@ -137,6 +160,16 @@
       <option value="queued">Queued</option>
       <option value="validated">Validated</option>
       <option value="skipped">Skipped</option>
+    </select>
+    <select bind:value={fulltextAvailability}>
+      <option value="">Any full-text availability</option>
+      <option value="available">Full text available</option>
+      <option value="unavailable">Full text unavailable</option>
+    </select>
+    <select bind:value={drawingsAvailability}>
+      <option value="">Any drawings availability</option>
+      <option value="available">Drawings available</option>
+      <option value="unavailable">Drawings unavailable</option>
     </select>
     <button onclick={runSearch}>Search</button>
   </div>
@@ -176,11 +209,18 @@
     <button onclick={handleExportSelected} disabled={selected.size === 0}>
       Export selected ({selected.size})…
     </button>
+    <button onclick={() => handleBulkRetrieve("fulltext")} disabled={selected.size === 0 || retrieving}>
+      Retrieve full text for selected
+    </button>
+    <button onclick={() => handleBulkRetrieve("drawings")} disabled={selected.size === 0 || retrieving}>
+      Retrieve drawings for selected
+    </button>
   </div>
 
   <table>
     <thead>
       <tr>
+        <th></th>
         <th></th>
         <th>Publication</th>
         <th>Title</th>
@@ -193,6 +233,11 @@
       {#each rows as row (row.id)}
         <tr>
           <td><input type="checkbox" checked={selected.has(row.id)} onchange={() => toggleSelected(row.id)} /></td>
+          <td>
+            {#if row.has_drawings}
+              <DrawingPage docId={row.id} page={0} size={40} />
+            {/if}
+          </td>
           <td>{row.pub_key}</td>
           <td>{row.title ?? "—"}</td>
           <td>{row.review_state}</td>
@@ -201,7 +246,7 @@
         </tr>
         {#if similarFor === row.id}
           <tr class="similar-row">
-            <td colspan="6">
+            <td colspan="7">
               {#if similarResults.length === 0}
                 <span class="note">No similar documents yet.</span>
               {:else}

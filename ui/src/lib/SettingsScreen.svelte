@@ -6,14 +6,17 @@
     exportTagSchema,
     getSettings,
     importTagSchema,
+    listTags,
     restoreBackup,
     updateSettings,
     type SettingsView,
+    type TagRow,
   } from "./api";
   import CredentialsPanel from "./CredentialsPanel.svelte";
 
   let settings = $state<SettingsView | null>(null);
   let dataDir = $state("");
+  let tags = $state<TagRow[]>([]);
   let status = $state("");
   let error = $state("");
   let busy = $state(false);
@@ -21,10 +24,14 @@
   async function refresh() {
     error = "";
     try {
-      [settings, dataDir] = await Promise.all([getSettings(), dataDirectory()]);
+      [settings, dataDir, tags] = await Promise.all([getSettings(), dataDirectory(), listTags()]);
     } catch (err) {
       error = String(err);
     }
+  }
+
+  function toggleTagId(list: number[], tagId: number): number[] {
+    return list.includes(tagId) ? list.filter((id) => id !== tagId) : [...list, tagId];
   }
 
   async function handleSave() {
@@ -148,7 +155,7 @@
 
     <section>
       <h2>Retrieval policies</h2>
-      <span class="note">Not consumed until M8 - full text and drawings aren't retrieved yet regardless of these.</span>
+      <span class="note">Drawings are heavier and count against a separate OPS quota category - "on demand" is the default.</span>
       <label>
         Full text
         <select bind:value={settings.fulltext_policy}>
@@ -158,6 +165,20 @@
           <option value="after_tagging_selected_tags">After tagging, for selected tags</option>
         </select>
       </label>
+      {#if settings.fulltext_policy === "after_tagging_selected_tags"}
+        <div class="tag-checklist">
+          {#each tags as tag (tag.id)}
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.fulltext_policy_tag_ids.includes(tag.id)}
+                onchange={() => settings && (settings.fulltext_policy_tag_ids = toggleTagId(settings.fulltext_policy_tag_ids, tag.id))}
+              />
+              {tag.name}
+            </label>
+          {/each}
+        </div>
+      {/if}
       <label>
         Drawings
         <select bind:value={settings.drawings_policy}>
@@ -167,6 +188,20 @@
           <option value="after_tagging_selected_tags">After tagging, for selected tags</option>
         </select>
       </label>
+      {#if settings.drawings_policy === "after_tagging_selected_tags"}
+        <div class="tag-checklist">
+          {#each tags as tag (tag.id)}
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                checked={settings.drawings_policy_tag_ids.includes(tag.id)}
+                onchange={() => settings && (settings.drawings_policy_tag_ids = toggleTagId(settings.drawings_policy_tag_ids, tag.id))}
+              />
+              {tag.name}
+            </label>
+          {/each}
+        </div>
+      {/if}
     </section>
 
     <button onclick={handleSave} disabled={busy}>Save settings</button>
@@ -235,6 +270,20 @@
   .note {
     color: var(--muted);
     font-size: 0.75rem;
+  }
+  .tag-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-alt);
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .tag-checklist .checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.3rem;
   }
   .actions {
     display: flex;
