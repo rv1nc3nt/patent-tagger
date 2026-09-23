@@ -142,3 +142,31 @@ Could not locate real examples of "EP B1 with literally no abstract" or "EP A1 w
 **Decision:** Build a minimal credentials path now — `keyring`-backed storage, Tauri commands, and a bare form with a "Test connection" button — not the full Settings screen. Expand at M7. Credentials for fixture-recording/live-testing are supplied via a local, gitignored `.env` (never pasted into chat).
 
 - `src-tauri::platform`: `resolve_data_dir()` is OS-gated (`#[cfg(windows)]` / `#[cfg(target_os = "linux")]`) per section 2, delegating to `windows.rs`/`linux.rs` for the actual base-directory and portable-mode-directory lookup (Linux additionally checks `$APPIMAGE`). The portability check itself (`portable.flag` present + directory writable) is a pure function of a `&Path`, so it's unit-tested with real temp directories instead of mocking the OS calls.
+
+## 2026-09-23 — M8 fulltext/images endpoint shapes and fixtures verified
+
+**Question:** Section 5.5 needs the fulltext-inquiry/description/claims and images-inquiry endpoint shapes verified against the live host, plus fixture tests for: EP A1 English, EP B1 trilingual claims, EP FR/DE-only with an English WO family member, a publication with no full text, a publication with drawings, one without, and a not-found case.
+
+**Decision/result:** Verified against the live host with real credentials:
+- `/published-data/publication/{format}/{number}/fulltext` (inquiry) lists `<ftxt:fulltext-instance lang=".." desc="description|claims">` — code must not assume availability, matching SPEC's own wording.
+- `/published-data/publication/{format}/{number}/description` and `.../claims` return the text directly; paragraph/claim numbers (`[0001]`, `1.`) are already literal text inside `<p>`/`<claim-text>`, not separate elements — no numbering needs to be synthesized.
+- `/published-data/publication/{format}/{number}/images` (inquiry) lists `<document-instance desc="FullDocument|Drawing|FirstPageClipping" link=".." number-of-pages="N">`. A publication with no drawings simply omits the `Drawing` instance — not an error.
+- A specific drawing page is fetched via the `X-OPS-Range` **HTTP header** (not a query parameter), set to the 1-based page number — confirmed by the response echoing back `x-ops-range: 1`. Not documented anywhere found without testing.
+
+Recorded 6 of 7 fixture cases as real data (EP1000000 A1/B1, a genuine 404, a real drawings/no-drawings pair, a real DE-only fulltext EP0100001). Could not find a real "EP FR/DE-only with an English WO family member" (the one real DE-only patent found, EP0100001, has a family member US4626301 with no full text in OPS) — synthesized this one case, reusing M2's existing synthetic EP2500000/WO2012000001 publication numbers for narrative consistency, clearly labeled `synthetic_*`.
+
+The non-text-content placeholder logic in `fulltext::parse_description`/`parse_claims` (tables/maths/chemistry → `"[... not reproduced]"`) is implemented per SPEC 5.5 but **unverified against any real example** — none of the recorded fixtures happen to contain a table or formula. Flagged in the module's own doc comment; revisit if a real case surfaces.
+
+## 2026-09-23 — `tiff` crate decodes Group 4 CCITT natively; no separate `fax` crate needed
+
+**Question:** Section 6 flags uncertainty over whether the `tiff` crate decodes Group 4 (CCITT fax) compression, the format OPS actually serves for drawing pages, or whether a separate `fax` crate would be needed as a fallback.
+
+**Decision:** Confirmed empirically: `tiff` 0.11.3 pulls in a `fax`/`fax34` sub-crate itself (visible via `cargo tree`) and decodes `CompressionMethod::Fax4` out of the box — no extra dependency needed. Verified end-to-end against a real fetched drawing page (`ep1000000_a1_drawing_page1_group4.tiff`, 2479×3508 raw): decoded, converted to PNG, and confirmed correct via an independent Python/Pillow decode of the same file.
+
+## 2026-09-23 — TIFF page rotation: apply the `Orientation` tag, output landscape
+
+**Question:** Section 5.5 says to "apply the rotation stored in the page, if any, so that landscape sheets display correctly," without naming the mechanism. The `tiff` crate does not apply the `Orientation` tag (274) automatically.
+
+**Investigation/bug caught:** The real fixture page's raw TIFF storage is portrait (2479 wide × 3508 tall) with `Orientation = 6` ("rotate 90° CW to display correctly"), correctly displaying as landscape (3508×2479) once rotated — confirmed against Pillow, which *does* apply TIFF orientation automatically on open (`Image.open(...).size` already returns the rotated landscape dimensions). The reference PNG fixture originally committed for the parity test had been generated from the raw, *unrotated* decode (portrait, sideways "FIG.1" heading) — a mistake caught by the Rust implementation (which correctly applies the rotation) disagreeing with that fixture on image dimensions (3508×2479 vs 2479×3508). Regenerated the reference fixture from Pillow's orientation-corrected open, confirmed visually (right-side-up, landscape) before overwriting.
+
+**Decision:** `images::tiff_page_to_png` reads tag 274 manually (`Decoder::get_tag_u32`, defaulting to `1`/no rotation when absent) and applies the corresponding one of the 8 EXIF/TIFF orientation transforms (rotation and/or mirroring) to the decoded pixel buffer before encoding to PNG, swapping width/height for the 4 transforms that involve a 90°/270° turn. Output is always 8-bit greyscale PNG regardless of the source's bit depth, since SPEC allows either "1-bit or greyscale" and a single output path avoids re-packing 1-bit rows after a rotation changes row byte-alignment.
