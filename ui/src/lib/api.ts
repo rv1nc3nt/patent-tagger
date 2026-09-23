@@ -52,6 +52,7 @@ export interface TagRow {
   version: number;
   archived: boolean;
   threshold: number | null;
+  neg_threshold: number | null;
   auto_enabled: boolean;
 }
 
@@ -84,6 +85,10 @@ export interface TagScore {
   source: "blend" | "lr" | "knn" | "zero_shot" | null;
   model_version: string;
   suggested: boolean;
+  /// SPEC 8: "confident automatic tags are shown as filled."
+  automatic: boolean;
+  /// SPEC 8: "uncertain tags...are highlighted."
+  uncertain: boolean;
 }
 
 export type FulltextStatus = "pending" | "fetched" | "not_available" | "non_english_only" | "error";
@@ -198,10 +203,27 @@ export interface TagMetrics {
   precision: number | null;
   recall: number | null;
   pr_curve: PrPoint[];
+  audited_precision: number | null;
+  audited_n: number;
+  full_automation_precision: number | null;
+  full_automation_recall: number | null;
+  full_automation_n: number;
 }
 
 export function tagMetrics(): Promise<TagMetrics[]> {
   return invoke("tag_metrics");
+}
+
+export interface FullAutomationSummary {
+  would_auto_complete: number;
+  total: number;
+  auto_completed: number;
+  audited_or_complete: number;
+  focused_review: number;
+}
+
+export function fullAutomationSummary(): Promise<FullAutomationSummary> {
+  return invoke("full_automation_summary");
 }
 
 export function retrainNow(): Promise<number> {

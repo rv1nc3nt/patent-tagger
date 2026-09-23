@@ -2,11 +2,13 @@
   import {
     disableAutomaticMode,
     enableAutomaticMode,
+    fullAutomationSummary,
     listTags,
     retrainNow,
     tagEligibility,
     tagMetrics,
     type Eligibility,
+    type FullAutomationSummary,
     type TagMetrics,
     type TagRow,
   } from "./api";
@@ -19,6 +21,7 @@
   }
 
   let rows = $state<Row[]>([]);
+  let summary = $state<FullAutomationSummary | null>(null);
   let error = $state("");
   let retraining = $state(false);
   let retrainMessage = $state("");
@@ -27,13 +30,18 @@
   async function refresh() {
     error = "";
     try {
-      const [tags, metrics] = await Promise.all([listTags(), tagMetrics()]);
+      const [tags, metrics, automationSummary] = await Promise.all([
+        listTags(),
+        tagMetrics(),
+        fullAutomationSummary(),
+      ]);
       const eligibilities = await Promise.all(tags.map((t) => tagEligibility(t.id)));
       rows = tags.map((tag, i) => ({
         tag,
         metrics: metrics.find((m) => m.tag_id === tag.id)!,
         eligibility: eligibilities[i],
       }));
+      summary = automationSummary;
     } catch (err) {
       error = String(err);
     }
@@ -88,6 +96,20 @@
 
   {#if error}<p class="error-banner">{error}</p>{/if}
 
+  {#if summary}
+    <div class="readiness">
+      <div class="readiness-stat">
+        <span class="value">{summary.total > 0 ? Math.round((100 * summary.would_auto_complete) / summary.total) : 0}%</span>
+        <span class="label">of the last {summary.total} documents would auto-complete with current settings</span>
+      </div>
+      <div class="readiness-counts">
+        <span><strong>{summary.auto_completed}</strong> auto-completed</span>
+        <span><strong>{summary.audited_or_complete}</strong> audited / fully decided</span>
+        <span><strong>{summary.focused_review}</strong> in focused review</span>
+      </div>
+    </div>
+  {/if}
+
   {#if rows.length === 0}
     <p class="empty">No tags yet.</p>
   {:else}
@@ -99,6 +121,8 @@
           <th>Precision</th>
           <th>Recall</th>
           <th>Threshold</th>
+          <th>Neg. threshold</th>
+          <th>Audit</th>
           <th>Automatic mode</th>
           <th>PR curve</th>
         </tr>
@@ -111,6 +135,15 @@
             <td>{fmt(row.metrics.precision)}</td>
             <td>{fmt(row.metrics.recall)}</td>
             <td>{row.tag.threshold === null ? "not calibrated" : row.tag.threshold.toFixed(2)}</td>
+            <td>{row.tag.neg_threshold === null ? "not calibrated" : row.tag.neg_threshold.toFixed(2)}</td>
+            <td class="audit-cell">
+              <span title="Audited precision (per-tag automatic mode safeguard)">
+                P {fmt(row.metrics.audited_precision)} (n={row.metrics.audited_n})
+              </span>
+              <span title="Full-automation audit precision/recall (n from a shared window)">
+                Full: P {fmt(row.metrics.full_automation_precision)} / R {fmt(row.metrics.full_automation_recall)} (n={row.metrics.full_automation_n})
+              </span>
+            </td>
             <td>
               <button
                 onclick={() => handleToggleAuto(row)}
@@ -158,6 +191,41 @@
   }
   .empty {
     color: var(--muted);
+  }
+  .readiness {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: var(--bg-alt);
+    border-radius: 6px;
+  }
+  .readiness-stat {
+    display: flex;
+    flex-direction: column;
+  }
+  .readiness-stat .value {
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+  .readiness-stat .label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    max-width: 220px;
+  }
+  .readiness-counts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.85rem;
+  }
+  .audit-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
   }
   table {
     width: 100%;

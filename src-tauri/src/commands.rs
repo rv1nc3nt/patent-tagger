@@ -449,6 +449,14 @@ pub struct TagMetricsRow {
     pub name: String,
     #[serde(flatten)]
     pub metrics: core_lib::predictions::TagMetrics,
+    /// SPEC 7.5's simpler, `pos`-only automatic-mode safeguard metric.
+    pub audited_precision: Option<f32>,
+    pub audited_n: i64,
+    /// SPEC 7.6's combined precision+recall full-automation safeguard,
+    /// from the same shared audit window (see docs/DECISIONS.md).
+    pub full_automation_precision: Option<f32>,
+    pub full_automation_recall: Option<f32>,
+    pub full_automation_n: i64,
 }
 
 #[tauri::command]
@@ -458,11 +466,41 @@ pub fn tag_metrics(state: State<Db>) -> Result<Vec<TagMetricsRow>, String> {
         .map_err(|e| e.to_string())?
         .into_iter()
         .map(|tag| {
-            core_lib::predictions::tag_metrics(&conn, tag.id)
-                .map(|metrics| TagMetricsRow { name: tag.name, metrics })
-                .map_err(|e| e.to_string())
+            let metrics = core_lib::predictions::tag_metrics(&conn, tag.id).map_err(|e| e.to_string())?;
+            let (audited_precision, audited_n) =
+                core_lib::audit::audited_precision(&conn, tag.id).map_err(|e| e.to_string())?;
+            let (full_automation_precision, full_automation_recall, full_automation_n) =
+                core_lib::audit::auto_completion_audit(&conn, tag.id).map_err(|e| e.to_string())?;
+            Ok(TagMetricsRow {
+                name: tag.name,
+                metrics,
+                audited_precision,
+                audited_n,
+                full_automation_precision,
+                full_automation_recall,
+                full_automation_n,
+            })
         })
         .collect()
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FullAutomationSummaryView {
+    #[serde(flatten)]
+    pub readiness: core_lib::full_automation::ReadinessResult,
+    #[serde(flatten)]
+    pub counts: core_lib::full_automation::AutomationStateCounts,
+}
+
+/// SPEC 7.6: "the Metrics screen shows the share of the last 300
+/// documents that would have been auto-completed" plus "counts of
+/// auto-completed, audited and focused-review documents."
+#[tauri::command]
+pub fn full_automation_summary(state: State<Db>) -> Result<FullAutomationSummaryView, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let readiness = core_lib::full_automation::auto_completion_readiness(&conn).map_err(|e| e.to_string())?;
+    let counts = core_lib::full_automation::automation_state_counts(&conn).map_err(|e| e.to_string())?;
+    Ok(FullAutomationSummaryView { readiness, counts })
 }
 
 pub(crate) fn current_timestamp() -> String {

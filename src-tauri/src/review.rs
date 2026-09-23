@@ -27,6 +27,16 @@ pub struct TagScore {
     /// 7.2: zero-shot suggestions are "shown as weak" and "never
     /// pre-checked").
     pub suggested: bool,
+    /// SPEC 8: "in focused review, confident automatic tags are shown as
+    /// filled" - true when this tag already carries a `source = auto`
+    /// label for this document (pos or neg), regardless of the *current*
+    /// score (which may have moved since the label was written).
+    pub automatic: bool,
+    /// SPEC 8: "uncertain tags...are highlighted" - true when the tag is
+    /// in automatic mode but neither confidently decided (no existing
+    /// automatic label) nor a plain suggestion: its score falls between
+    /// `neg_threshold` and `threshold`, or one/both aren't calibrated yet.
+    pub uncertain: bool,
 }
 
 /// One tag's blended score for one document's embedding (SPEC 7.3). Pulled
@@ -78,6 +88,9 @@ pub fn score_document(
     // Any existing pos label (human or automatic) - either represents a
     // decision already on record, worth pre-checking in the UI.
     let already_positive = labels::all_positive_tag_ids(conn, doc_id)?;
+    // SPEC 8: "confident automatic tags are shown as filled" - tags with
+    // an existing `source = auto` label (pos or neg) for this document.
+    let auto_labelled = labels::auto_labelled_tag_ids(conn, doc_id)?;
 
     let mut validated_neighbours = None;
 
@@ -92,6 +105,13 @@ pub fn score_document(
         let suggested = already_positive.contains(&tag.id)
             || (source != Some("zero_shot") && score.is_some_and(|s| s >= effective_threshold));
 
+        let automatic = auto_labelled.contains(&tag.id);
+        let uncertain = !automatic
+            && matches!(
+                core_lib::full_automation::decide_tag(tag, score),
+                core_lib::full_automation::TagDecision::Uncertain
+            );
+
         scores.push(TagScore {
             tag_id: tag.id,
             name: tag.name.clone(),
@@ -101,6 +121,8 @@ pub fn score_document(
             source: source.map(str::to_string),
             model_version,
             suggested,
+            automatic,
+            uncertain,
         });
     }
 

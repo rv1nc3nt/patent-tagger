@@ -108,6 +108,54 @@ pub fn auto_completion_readiness(conn: &Connection) -> Result<ReadinessResult, S
     Ok(ReadinessResult { would_auto_complete: would_auto_complete_count, total: doc_ids.len() as i64 })
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+pub struct AutomationStateCounts {
+    pub auto_completed: i64,
+    /// Still-queued documents where *every* active tag already carries an
+    /// automatic label - SPEC 7.6's audit sample (would have auto-completed,
+    /// routed to a full review instead) or, before enough documents exist
+    /// to prove it, one that simply hasn't been picked up by
+    /// `apply_full_automation` yet; either way, indistinguishable from
+    /// stored state alone without a dedicated flag, and both cases show the
+    /// same thing to the user - "fully decided, awaiting review."
+    pub audited_or_complete: i64,
+    /// Still-queued documents where *some but not all* active tags carry
+    /// an automatic label (SPEC 7.6's focused review: "confident tags are
+    /// pre-filled...uncertain tags...are highlighted").
+    pub focused_review: i64,
+}
+
+/// SPEC 7.6: "counts of auto-completed, audited and focused-review
+/// documents" for the Metrics screen.
+pub fn automation_state_counts(conn: &Connection) -> Result<AutomationStateCounts, StorageError> {
+    let n_active_tags = crate::tags::list_active(conn)?.len() as i64;
+
+    let auto_completed: i64 = conn.query_row(
+        "SELECT count(*) FROM documents WHERE review_state = 'auto_completed'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let mut stmt = conn.prepare(
+        "SELECT (
+            SELECT count(*) FROM labels l JOIN tags t ON t.id = l.tag_id
+            WHERE l.doc_id = d.id AND l.source = 'auto' AND t.archived = 0
+         ) AS auto_count
+         FROM documents d WHERE d.fetch_status = 'fetched' AND d.review_state = 'queued'",
+    )?;
+    let auto_counts: Vec<i64> = stmt.query_map([], |row| row.get(0))?.collect::<Result<_, _>>()?;
+
+    let mut counts = AutomationStateCounts { auto_completed, ..Default::default() };
+    for auto_count in auto_counts {
+        if n_active_tags > 0 && auto_count == n_active_tags {
+            counts.audited_or_complete += 1;
+        } else if auto_count > 0 {
+            counts.focused_review += 1;
+        }
+    }
+    Ok(counts)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +270,48 @@ mod tests {
 
         let after = auto_completion_readiness(&conn).unwrap();
         assert_eq!(after.would_auto_complete, 1, "replaying the same recorded score against the new settings");
+    }
+
+    #[test]
+    fn automation_state_counts_classifies_each_document() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let battery_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let solar_id = tags::create(&conn, "Solar", "About solar", None, None, NOW).unwrap();
+
+        let fetched = || documents::FetchedData {
+            abstract_text: Some("An abstract".to_string()),
+            ..Default::default()
+        };
+
+        // Auto-completed: not in the queue at all, shouldn't be counted
+        // as focused/audited.
+        documents::insert_pending(&conn, "EPDONE0001", "EPDONE0001", NOW).unwrap();
+        let done = documents::find_by_pub_key(&conn, "EPDONE0001").unwrap().unwrap();
+        documents::mark_auto_completed(&conn, done.id).unwrap();
+
+        // Fully auto-labelled but still queued (audit sample or awaiting
+        // completion).
+        documents::insert_pending(&conn, "EPFULL0001", "EPFULL0001", NOW).unwrap();
+        let full = documents::find_by_pub_key(&conn, "EPFULL0001").unwrap().unwrap();
+        documents::store_fetched(&conn, full.id, &fetched()).unwrap();
+        crate::labels::write_automatic_label(&conn, full.id, battery_id, 0.9, "m@v1", 1, NOW).unwrap();
+        crate::labels::write_automatic_neg_label(&conn, full.id, solar_id, 0.1, "m@v1", 1, NOW).unwrap();
+
+        // Partially auto-labelled (focused review).
+        documents::insert_pending(&conn, "EPPART0001", "EPPART0001", NOW).unwrap();
+        let partial = documents::find_by_pub_key(&conn, "EPPART0001").unwrap().unwrap();
+        documents::store_fetched(&conn, partial.id, &fetched()).unwrap();
+        crate::labels::write_automatic_label(&conn, partial.id, battery_id, 0.9, "m@v1", 1, NOW).unwrap();
+
+        // Plain queued, no automatic decisions at all.
+        documents::insert_pending(&conn, "EPPLAIN0001", "EPPLAIN0001", NOW).unwrap();
+        let plain = documents::find_by_pub_key(&conn, "EPPLAIN0001").unwrap().unwrap();
+        documents::store_fetched(&conn, plain.id, &fetched()).unwrap();
+
+        let counts = automation_state_counts(&conn).unwrap();
+        assert_eq!(counts.auto_completed, 1);
+        assert_eq!(counts.audited_or_complete, 1);
+        assert_eq!(counts.focused_review, 1);
     }
 
     #[test]

@@ -34,6 +34,7 @@ pub fn run() {
       commands::skip_document,
       commands::retrain_now,
       commands::tag_metrics,
+      commands::full_automation_summary,
       commands::enable_automatic_mode,
       commands::disable_automatic_mode,
       commands::tag_eligibility,

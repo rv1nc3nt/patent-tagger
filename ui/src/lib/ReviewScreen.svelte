@@ -317,7 +317,7 @@
           />
           <ul>
             {#each visibleTags as tag (tag.tag_id)}
-              <li class:weak={tag.source === "zero_shot"}>
+              <li class:weak={tag.source === "zero_shot"} class:automatic={tag.automatic} class:uncertain={tag.uncertain}>
                 <label>
                   <input
                     type="checkbox"
@@ -325,6 +325,7 @@
                     onchange={() => toggleTag(tag.tag_id)}
                   />
                   <span class="name">{tag.name}</span>
+                  {#if tag.automatic}<span class="badge" title="Decided automatically">auto</span>{/if}
                   {#if tag.hotkey}<kbd>{tag.hotkey}</kbd>{/if}
                 </label>
                 {#if tag.score !== null}
@@ -476,6 +477,23 @@
   .tags-pane li.weak label {
     opacity: 0.7;
     font-style: italic;
+  }
+  .tags-pane li.automatic {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-radius: 4px;
+  }
+  .tags-pane li.uncertain {
+    box-shadow: inset 3px 0 0 var(--series-recall);
+    padding-left: 0.35rem;
+  }
+  .tags-pane .badge {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    padding: 0 0.25rem;
   }
   .tags-pane label {
     display: flex;
