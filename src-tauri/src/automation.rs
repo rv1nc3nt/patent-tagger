@@ -203,6 +203,17 @@ pub fn apply_full_automation(
         }
         documents::mark_auto_completed(conn, doc.id)?;
         summary.auto_completed += 1;
+
+        // SPEC 5.5: the "after tagging" retrieval policies fire on
+        // validation *or* auto-completion - `validate_document` triggers
+        // this same check for the human path.
+        let positive_tag_ids: std::collections::HashSet<i64> = active_tags
+            .iter()
+            .zip(&decisions)
+            .filter(|(_, d)| **d == TagDecision::Pos)
+            .map(|(t, _)| t.id)
+            .collect();
+        crate::commands::enqueue_retrieval_after_tagging(conn, doc.id, &positive_tag_ids, now)?;
     }
 
     Ok(summary)
@@ -505,6 +516,30 @@ mod tests {
         let readiness = full_automation::auto_completion_readiness(&conn).unwrap();
         assert_eq!(readiness.total, 1, "the auto-completed document's score should be recorded");
         assert_eq!(readiness.would_auto_complete, 1);
+    }
+
+    #[test]
+    fn apply_full_automation_enqueues_retrieval_for_an_auto_completed_document() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        settings::set(&conn, settings::FULL_AUTOMATION_ENABLED_KEY, "true").unwrap();
+        settings::set(&conn, settings::AUDIT_RATE_KEY, "0").unwrap();
+        settings::set(&conn, core_lib::settings::FULLTEXT_POLICY_KEY, "after_tagging_all").unwrap();
+
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
+        tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
+        tags::set_auto_enabled(&conn, tag_id, true).unwrap();
+        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+
+        let doc_id = fetched_doc_with_embedding(&conn, "EP0000001", &[0.0, 1.0]);
+
+        let summary = apply_full_automation(&conn, &DirectionEmbedder, NOW).unwrap();
+        assert_eq!(summary.auto_completed, 1);
+
+        let jobs = core_lib::jobs::list_resumable(&conn, crate::retrieval_worker::FULLTEXT_JOB_KIND).unwrap();
+        assert_eq!(jobs.len(), 1);
+        let payload: serde_json::Value = serde_json::from_str(&jobs[0].payload).unwrap();
+        assert_eq!(payload["doc_id"].as_i64(), Some(doc_id));
     }
 
     #[test]

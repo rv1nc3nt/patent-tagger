@@ -344,7 +344,10 @@ pub fn validate_document(
 /// is validated. Skips enqueueing when retrieval already succeeded, so
 /// re-validating a document (e.g. after a tag's definition changed) never
 /// re-does finished work.
-fn enqueue_retrieval_after_tagging(
+/// `pub(crate)` so `automation::apply_full_automation` can trigger the same
+/// policy check when a document becomes `auto_completed` (SPEC 5.5: "after
+/// tagging, when the document is validated *or auto-completed*").
+pub(crate) fn enqueue_retrieval_after_tagging(
     conn: &Connection,
     doc_id: i64,
     checked_tag_ids: &HashSet<i64>,
