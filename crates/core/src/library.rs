@@ -1,8 +1,9 @@
 //! Library search (SPEC section 8): full-text search over abstracts (FTS5)
-//! combined with tag/label-source/review-state filters, plus "similar to
-//! this document" (embedding search). Full-text/drawings-availability
-//! filters and bulk retrieval aren't included yet - they need the
-//! retrieval pipeline M8 builds.
+//! combined with tag/label-source/review-state/full-text/drawings-
+//! availability filters, plus "similar to this document" (embedding
+//! search). Bulk retrieval of full text/drawings for a selection is
+//! `src-tauri`'s job, driving this module's search only to pick the
+//! selection.
 
 use crate::storage::StorageError;
 use rusqlite::{params, Connection};
@@ -20,6 +21,15 @@ pub struct LibraryFilters {
     pub label_source: Option<String>,
     /// `"validated" | "auto_completed" | "queued" | "skipped"`.
     pub review_state: Option<String>,
+    /// `"available" | "unavailable"` - "available" means `fulltext.status`
+    /// is `fetched` or `non_english_only` (SPEC 5.5: text was retrieved,
+    /// even if not in English); a missing `fulltext` row counts the same
+    /// as `unavailable`.
+    pub fulltext_availability: Option<String>,
+    /// `"available" | "unavailable"` - "available" means
+    /// `drawings_status.status = 'fetched'`; a missing row counts the
+    /// same as `unavailable`.
+    pub drawings_availability: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -62,6 +72,23 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
     if let Some(state) = &filters.review_state {
         bind_values.push(state.clone());
         conditions.push(format!("d.review_state = ?{}", bind_values.len()));
+    }
+    if let Some(availability) = &filters.fulltext_availability {
+        let exists = "EXISTS (SELECT 1 FROM fulltext ft WHERE ft.doc_id = d.id AND ft.status IN ('fetched', 'non_english_only'))";
+        conditions.push(if availability == "available" {
+            exists.to_string()
+        } else {
+            format!("NOT {exists}")
+        });
+    }
+    if let Some(availability) = &filters.drawings_availability {
+        let exists =
+            "EXISTS (SELECT 1 FROM drawings_status ds WHERE ds.doc_id = d.id AND ds.status = 'fetched')";
+        conditions.push(if availability == "available" {
+            exists.to_string()
+        } else {
+            format!("NOT {exists}")
+        });
     }
 
     sql.push_str(" WHERE ");
@@ -222,6 +249,48 @@ mod tests {
         let rows = search(&conn, &filters).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].pub_key, "EP2222222");
+    }
+
+    #[test]
+    fn fulltext_availability_filter_treats_non_english_only_as_available() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let with_text = fetched_doc(&conn, "EP1111111", "A", "a");
+        fetched_doc(&conn, "EP2222222", "B", "b");
+        crate::fulltext::store_fetched(&conn, with_text, Some("[0001] text"), None, "DE", "EP.1.A1", true, NOW)
+            .unwrap();
+
+        let available = search(
+            &conn,
+            &LibraryFilters { fulltext_availability: Some("available".to_string()), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(available.len(), 1);
+        assert_eq!(available[0].pub_key, "EP1111111");
+
+        let unavailable = search(
+            &conn,
+            &LibraryFilters { fulltext_availability: Some("unavailable".to_string()), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(unavailable.len(), 1);
+        assert_eq!(unavailable[0].pub_key, "EP2222222");
+    }
+
+    #[test]
+    fn drawings_availability_filter_requires_fetched_status() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let with_drawings = fetched_doc(&conn, "EP1111111", "A", "a");
+        let pending = fetched_doc(&conn, "EP2222222", "B", "b");
+        crate::drawings::store_fetched_status(&conn, with_drawings, 1, "EP.1.A1", NOW).unwrap();
+        crate::drawings::store_not_available(&conn, pending, NOW).unwrap();
+
+        let available = search(
+            &conn,
+            &LibraryFilters { drawings_availability: Some("available".to_string()), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(available.len(), 1);
+        assert_eq!(available[0].pub_key, "EP1111111");
     }
 
     #[test]

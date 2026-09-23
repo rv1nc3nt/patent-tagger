@@ -1,7 +1,7 @@
 //! Export data assembly (SPEC section 8): CSV/JSON rows, a per-tag
 //! publication-number list, and the per-document `.txt` format. Pure
-//! data-gathering here; writing files (and any drawing images once M8
-//! exists) is `src-tauri`'s job.
+//! data-gathering here; writing files (folders, `.txt`, drawing images) is
+//! `src-tauri`'s job.
 
 use crate::storage::StorageError;
 use rusqlite::{params, Connection};
@@ -82,11 +82,40 @@ pub fn pub_keys_for_tag(conn: &Connection, tag_id: i64) -> Result<Vec<String>, S
     Ok(rows)
 }
 
+/// Full text and drawings data for one document's export (SPEC section
+/// 8). `None` means the retrieval simply hasn't happened yet (`fulltext`/
+/// `drawings_status` has no row, or `status = "pending"`) as opposed to
+/// having tried and found nothing (`not_available`) - both are stated
+/// explicitly in [`document_txt`], but with different wording.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DocumentExportFulltext {
+    pub status: String,
+    pub description: Option<String>,
+    pub claims: Option<String>,
+    pub lang: Option<String>,
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DocumentExportDrawings {
+    pub status: String,
+    /// Relative paths as written under the export folder, e.g.
+    /// `drawings/001.png`, in page order.
+    pub page_paths: Vec<String>,
+    pub source: Option<String>,
+}
+
 /// The per-document `.txt` export format (SPEC section 8's Export
-/// subsection). Full text/drawings don't exist until M8, so those
-/// sections explicitly say so rather than being silently omitted, per
-/// "Missing parts are stated explicitly...never omitted silently".
-pub fn document_txt(detail: &crate::documents::DocumentDetail, tags: &[String]) -> String {
+/// subsection). `fulltext`/`drawings` are `None` when retrieval was never
+/// attempted (no row in `fulltext`/`drawings_status` yet, e.g. the policy
+/// is "never" or "on demand" and nobody asked); "Missing parts are stated
+/// explicitly...never omitted silently" applies to that case too.
+pub fn document_txt(
+    detail: &crate::documents::DocumentDetail,
+    tags: &[String],
+    fulltext: Option<&DocumentExportFulltext>,
+    drawings: Option<&DocumentExportDrawings>,
+) -> String {
     let mut out = String::new();
     let kind_codes = if detail.kind_codes.is_empty() {
         String::new()
@@ -105,16 +134,78 @@ pub fn document_txt(detail: &crate::documents::DocumentDetail, tags: &[String]) 
     ));
     out.push_str(&format!("CPC: {}\n", if detail.cpc.is_empty() { "Not available".to_string() } else { detail.cpc.join(", ") }));
     out.push_str(&format!("Tags: {}\n", if tags.is_empty() { "None".to_string() } else { tags.join("; ") }));
+
+    let mut sources = Vec::new();
+    if let Some(s) = &detail.abstract_source {
+        sources.push(format!("abstract {s}"));
+    }
+    if let Some(ft) = fulltext {
+        if let Some(s) = &ft.source {
+            sources.push(format!("full text {s}"));
+        }
+    }
+    if let Some(dr) = drawings {
+        if let Some(s) = &dr.source {
+            sources.push(format!("drawings {s}"));
+        }
+    }
+    out.push_str(&format!("Sources: {}\n", if sources.is_empty() { "None".to_string() } else { sources.join("; ") }));
+
     out.push('\n');
     out.push_str("===== ABSTRACT =====\n");
     out.push_str(detail.abstract_text.as_deref().unwrap_or("Not available"));
     out.push('\n');
+
     out.push_str("===== DESCRIPTION =====\n");
-    out.push_str("Full text not retrieved.\n");
+    out.push_str(&fulltext_part_text(fulltext, |ft| ft.description.as_deref(), "Description"));
     out.push_str("===== CLAIMS =====\n");
-    out.push_str("Full text not retrieved.\n");
+    out.push_str(&fulltext_part_text(fulltext, |ft| ft.claims.as_deref(), "Claims"));
+
     out.push_str("===== DRAWINGS =====\n");
-    out.push_str("Not retrieved.\n");
+    match drawings {
+        None => out.push_str("Drawings not retrieved.\n"),
+        Some(dr) => match dr.status.as_str() {
+            "fetched" if !dr.page_paths.is_empty() => {
+                for path in &dr.page_paths {
+                    out.push_str(path);
+                    out.push('\n');
+                }
+            }
+            "not_available" => out.push_str("This publication has no drawings.\n"),
+            "error" => out.push_str("Drawings retrieval failed.\n"),
+            _ => out.push_str("Drawings not retrieved.\n"),
+        },
+    }
+    out
+}
+
+/// `part` picks `description` or `claims` off a fetched row; `label`
+/// names the part for the "not available"/"pending" wording.
+fn fulltext_part_text(
+    fulltext: Option<&DocumentExportFulltext>,
+    part: impl Fn(&DocumentExportFulltext) -> Option<&str>,
+    label: &str,
+) -> String {
+    let mut out = String::new();
+    match fulltext {
+        None => out.push_str(&format!("{label} not retrieved.\n")),
+        Some(ft) => match ft.status.as_str() {
+            "not_available" => out.push_str("Full text not available in OPS.\n"),
+            "error" => out.push_str("Full text retrieval failed.\n"),
+            "fetched" | "non_english_only" => match part(ft) {
+                Some(text) => {
+                    if ft.status == "non_english_only" {
+                        let lang = ft.lang.as_deref().unwrap_or("unknown");
+                        out.push_str(&format!("[Non-English text, language: {lang}]\n"));
+                    }
+                    out.push_str(text);
+                    out.push('\n');
+                }
+                None => out.push_str(&format!("{label} not available for this publication.\n")),
+            },
+            _ => out.push_str(&format!("{label} not retrieved.\n")),
+        },
+    }
     out
 }
 
@@ -183,21 +274,71 @@ mod tests {
         assert_eq!(pub_keys_for_tag(&conn, tag_id).unwrap(), vec!["EP1111111"]);
     }
 
-    #[test]
-    fn document_txt_states_missing_parts_explicitly() {
-        let detail = documents::DocumentDetail {
+    fn base_detail() -> documents::DocumentDetail {
+        documents::DocumentDetail {
             id: 1,
             pub_key: "EP1234567".to_string(),
             title: Some("A gadget".to_string()),
             abstract_text: Some("An abstract".to_string()),
+            abstract_source: Some("EP.1234567.A1".to_string()),
             kind_codes: vec!["A1".to_string()],
             ..Default::default()
-        };
-        let text = document_txt(&detail, &["Battery".to_string()]);
+        }
+    }
+
+    #[test]
+    fn document_txt_states_missing_parts_explicitly_when_never_retrieved() {
+        let text = document_txt(&base_detail(), &["Battery".to_string()], None, None);
         assert!(text.starts_with("Publication: EP1234567 (A1)\n"));
         assert!(text.contains("Applicants: Not available"));
+        assert!(text.contains("Sources: abstract EP.1234567.A1\n"));
         assert!(text.contains("===== ABSTRACT =====\nAn abstract"));
-        assert!(text.contains("===== DESCRIPTION =====\nFull text not retrieved."));
-        assert!(text.contains("===== DRAWINGS =====\nNot retrieved."));
+        assert!(text.contains("===== DESCRIPTION =====\nDescription not retrieved."));
+        assert!(text.contains("===== CLAIMS =====\nClaims not retrieved."));
+        assert!(text.contains("===== DRAWINGS =====\nDrawings not retrieved."));
+    }
+
+    #[test]
+    fn document_txt_reports_full_text_and_drawings_when_fetched() {
+        let fulltext = DocumentExportFulltext {
+            status: "fetched".to_string(),
+            description: Some("[0001] A widget.".to_string()),
+            claims: Some("1. A widget.".to_string()),
+            lang: Some("EN".to_string()),
+            source: Some("EP.1234567.B1".to_string()),
+        };
+        let drawings = DocumentExportDrawings {
+            status: "fetched".to_string(),
+            page_paths: vec!["drawings/001.png".to_string(), "drawings/002.png".to_string()],
+            source: Some("EP.1234567.A1".to_string()),
+        };
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
+        assert!(text.contains("Sources: abstract EP.1234567.A1; full text EP.1234567.B1; drawings EP.1234567.A1\n"));
+        assert!(text.contains("===== DESCRIPTION =====\n[0001] A widget.\n"));
+        assert!(text.contains("===== CLAIMS =====\n1. A widget.\n"));
+        assert!(text.contains("===== DRAWINGS =====\ndrawings/001.png\ndrawings/002.png\n"));
+    }
+
+    #[test]
+    fn document_txt_marks_non_english_text_with_its_language() {
+        let fulltext = DocumentExportFulltext {
+            status: "non_english_only".to_string(),
+            description: Some("[0001] Nur Deutsch.".to_string()),
+            claims: None,
+            lang: Some("DE".to_string()),
+            source: Some("EP.1234567.A1".to_string()),
+        };
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), None);
+        assert!(text.contains("===== DESCRIPTION =====\n[Non-English text, language: DE]\n[0001] Nur Deutsch.\n"));
+        assert!(text.contains("===== CLAIMS =====\nClaims not available for this publication.\n"));
+    }
+
+    #[test]
+    fn document_txt_states_not_available_distinctly_from_not_retrieved() {
+        let fulltext = DocumentExportFulltext { status: "not_available".to_string(), ..Default::default() };
+        let drawings = DocumentExportDrawings { status: "not_available".to_string(), ..Default::default() };
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
+        assert!(text.contains("===== DESCRIPTION =====\nFull text not available in OPS.\n"));
+        assert!(text.contains("===== DRAWINGS =====\nThis publication has no drawings.\n"));
     }
 }

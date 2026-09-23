@@ -29,6 +29,7 @@ pub struct DocumentDetail {
     pub pub_key: String,
     pub title: Option<String>,
     pub abstract_text: Option<String>,
+    pub abstract_source: Option<String>,
     pub applicants: Vec<String>,
     pub publication_date: Option<String>,
     pub cpc: Vec<String>,
@@ -61,7 +62,7 @@ pub fn list_queue(conn: &Connection) -> Result<Vec<QueueEntry>, StorageError> {
 
 pub fn get_full(conn: &Connection, doc_id: i64) -> Result<Option<DocumentDetail>, StorageError> {
     conn.query_row(
-        "SELECT id, pub_key, title, \"abstract\", applicants, publication_date, cpc, ipc,
+        "SELECT id, pub_key, title, \"abstract\", abstract_source, applicants, publication_date, cpc, ipc,
                 kind_codes, application_number, family_id
          FROM documents WHERE id = ?1",
         params![doc_id],
@@ -74,13 +75,14 @@ pub fn get_full(conn: &Connection, doc_id: i64) -> Result<Option<DocumentDetail>
                 pub_key: row.get(1)?,
                 title: row.get(2)?,
                 abstract_text: row.get(3)?,
-                applicants: json_array(row.get(4)?),
-                publication_date: row.get(5)?,
-                cpc: json_array(row.get(6)?),
-                ipc: json_array(row.get(7)?),
-                kind_codes: json_array(row.get(8)?),
-                application_number: row.get(9)?,
-                family_id: row.get(10)?,
+                abstract_source: row.get(4)?,
+                applicants: json_array(row.get(5)?),
+                publication_date: row.get(6)?,
+                cpc: json_array(row.get(7)?),
+                ipc: json_array(row.get(8)?),
+                kind_codes: json_array(row.get(9)?),
+                application_number: row.get(10)?,
+                family_id: row.get(11)?,
             })
         },
     )

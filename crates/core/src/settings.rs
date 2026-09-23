@@ -83,6 +83,35 @@ pub fn drawings_policy(conn: &Connection) -> Result<String, StorageError> {
     Ok(get(conn, DRAWINGS_POLICY_KEY)?.unwrap_or_else(|| DEFAULT_DRAWINGS_POLICY.to_string()))
 }
 
+pub const FULLTEXT_POLICY_TAG_IDS_KEY: &str = "fulltext_policy_tag_ids";
+pub const DRAWINGS_POLICY_TAG_IDS_KEY: &str = "drawings_policy_tag_ids";
+
+/// The tag ids consulted by the `after_tagging_selected_tags` policy
+/// (SPEC 5.5). Stored as JSON since `settings` is a plain key-value table.
+fn get_tag_ids(conn: &Connection, key: &str) -> Result<Vec<i64>, StorageError> {
+    Ok(get(conn, key)?.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
+}
+
+fn set_tag_ids(conn: &Connection, key: &str, tag_ids: &[i64]) -> Result<(), StorageError> {
+    set(conn, key, &serde_json::to_string(tag_ids).unwrap_or_default())
+}
+
+pub fn fulltext_policy_tag_ids(conn: &Connection) -> Result<Vec<i64>, StorageError> {
+    get_tag_ids(conn, FULLTEXT_POLICY_TAG_IDS_KEY)
+}
+
+pub fn set_fulltext_policy_tag_ids(conn: &Connection, tag_ids: &[i64]) -> Result<(), StorageError> {
+    set_tag_ids(conn, FULLTEXT_POLICY_TAG_IDS_KEY, tag_ids)
+}
+
+pub fn drawings_policy_tag_ids(conn: &Connection) -> Result<Vec<i64>, StorageError> {
+    get_tag_ids(conn, DRAWINGS_POLICY_TAG_IDS_KEY)
+}
+
+pub fn set_drawings_policy_tag_ids(conn: &Connection, tag_ids: &[i64]) -> Result<(), StorageError> {
+    set_tag_ids(conn, DRAWINGS_POLICY_TAG_IDS_KEY, tag_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +156,19 @@ mod tests {
 
         set(&conn, FULLTEXT_POLICY_KEY, "never").unwrap();
         assert_eq!(fulltext_policy(&conn).unwrap(), "never");
+    }
+
+    #[test]
+    fn policy_tag_ids_default_empty_and_round_trip() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        assert_eq!(fulltext_policy_tag_ids(&conn).unwrap(), Vec::<i64>::new());
+
+        set_fulltext_policy_tag_ids(&conn, &[1, 2, 3]).unwrap();
+        assert_eq!(fulltext_policy_tag_ids(&conn).unwrap(), vec![1, 2, 3]);
+        assert_eq!(drawings_policy_tag_ids(&conn).unwrap(), Vec::<i64>::new());
+
+        set_drawings_policy_tag_ids(&conn, &[4]).unwrap();
+        assert_eq!(drawings_policy_tag_ids(&conn).unwrap(), vec![4]);
+        assert_eq!(fulltext_policy_tag_ids(&conn).unwrap(), vec![1, 2, 3], "the two policies' tag lists are independent");
     }
 }

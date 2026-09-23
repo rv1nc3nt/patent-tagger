@@ -42,14 +42,16 @@ pub fn find_first_page_clipping(instances: &[DocumentInstance]) -> Option<&Docum
     instances.iter().find(|i| i.desc == "FirstPageClipping")
 }
 
-/// Converts one decoded TIFF page to PNG bytes (SPEC 5.5: "convert each
-/// page to a 1-bit or greyscale PNG for storage and display, since
-/// webviews do not display TIFF"; "apply the rotation stored in the page,
-/// if any"). Output is 8-bit greyscale regardless of the source bit depth
-/// - SPEC explicitly allows either "1-bit or greyscale", and keeping a
-/// single output path sidesteps re-packing 1-bit rows after a rotation
-/// changes the row byte-alignment.
-pub fn tiff_page_to_png(tiff_bytes: &[u8]) -> Result<Vec<u8>, OpsError> {
+/// Converts one decoded TIFF page to PNG bytes, returning `(width, height,
+/// png_bytes)` (the caller persists width/height alongside the file per
+/// SPEC 4.2's `drawings` schema). SPEC 5.5: "convert each page to a 1-bit
+/// or greyscale PNG for storage and display, since webviews do not
+/// display TIFF"; "apply the rotation stored in the page, if any". Output
+/// is 8-bit greyscale regardless of the source bit depth - SPEC explicitly
+/// allows either "1-bit or greyscale", and keeping a single output path
+/// sidesteps re-packing 1-bit rows after a rotation changes the row
+/// byte-alignment.
+pub fn tiff_page_to_png(tiff_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), OpsError> {
     let cursor = std::io::Cursor::new(tiff_bytes);
     let mut decoder =
         tiff::decoder::Decoder::new(cursor).map_err(|e| OpsError::Parse(format!("invalid TIFF: {e}")))?;
@@ -75,7 +77,7 @@ pub fn tiff_page_to_png(tiff_bytes: &[u8]) -> Result<Vec<u8>, OpsError> {
             .write_image_data(&grey)
             .map_err(|e| OpsError::Parse(format!("writing PNG data: {e}")))?;
     }
-    Ok(png_bytes)
+    Ok((width, height, png_bytes))
 }
 
 /// Expands whatever `tiff` decoded (packed 1-bit bilevel, or already 8-bit
@@ -177,7 +179,8 @@ mod tests {
     #[test]
     fn decodes_a_real_group4_tiff_page_matching_the_reference_png() {
         let tiff_bytes = fixture_bytes("ep1000000_a1_drawing_page1_group4.tiff");
-        let png_bytes = tiff_page_to_png(&tiff_bytes).expect("should decode and convert");
+        let (width, height, png_bytes) = tiff_page_to_png(&tiff_bytes).expect("should decode and convert");
+        assert_eq!((width, height), (3508, 2479), "orientation-corrected, landscape");
 
         let reference_png = fixture_bytes("ep1000000_a1_drawing_page1_reference.png");
 

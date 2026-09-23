@@ -3,13 +3,16 @@
 pub mod audit;
 pub mod classifier;
 pub mod documents;
+pub mod drawings;
 pub mod embeddings;
 pub mod export;
+pub mod fulltext;
 pub mod jobs;
 pub mod labels;
 pub mod library;
 pub mod number;
 pub mod predictions;
+pub mod retrieval_policy;
 pub mod scoring;
 pub mod selection;
 pub mod settings;
