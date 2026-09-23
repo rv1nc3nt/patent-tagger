@@ -47,12 +47,17 @@ pub fn target_recall(conn: &Connection) -> Result<f32, StorageError> {
 }
 
 pub const AUDIT_RATE_KEY: &str = "audit_rate";
-const DEFAULT_AUDIT_RATE: f32 = 0.10;
+/// SPEC 7.6: "a fraction (default 5%) of auto-completed documents is
+/// sampled." M6's own per-tag safeguard never actually consumed this
+/// setting (it audits every automatic decision that happens to reach
+/// review anyway, not a sampled fraction - see docs/DECISIONS.md), so M9's
+/// full-automation sampling is this setting's first real consumer; its
+/// default follows 7.6's number rather than 7.5's different one (10%),
+/// which was only ever a placeholder.
+const DEFAULT_AUDIT_RATE: f32 = 0.05;
 
-/// SPEC 7.5/7.6: the fraction of automatically tagged/auto-completed
-/// documents sampled for full review. Stored from M7; the sampling
-/// mechanism itself is M9 (see docs/DECISIONS.md on why M6 audits every
-/// decision rather than a sample, until documents can skip review at all).
+/// The fraction of auto-completed documents sampled into the review queue
+/// as a full review (SPEC 7.6).
 pub fn audit_rate(conn: &Connection) -> Result<f32, StorageError> {
     get_f32(conn, AUDIT_RATE_KEY, DEFAULT_AUDIT_RATE)
 }
@@ -142,7 +147,7 @@ mod tests {
     fn every_setting_has_the_documented_default() {
         let conn = storage::open_in_memory().expect("in-memory db");
         assert_eq!(target_recall(&conn).unwrap(), 0.95);
-        assert_eq!(audit_rate(&conn).unwrap(), 0.10);
+        assert_eq!(audit_rate(&conn).unwrap(), 0.05);
         assert!(!full_automation_enabled(&conn).unwrap());
         assert_eq!(fulltext_policy(&conn).unwrap(), "after_tagging_all");
         assert_eq!(drawings_policy(&conn).unwrap(), "on_demand");

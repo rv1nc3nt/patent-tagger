@@ -5,7 +5,7 @@
 
 use crate::storage::StorageError;
 use crate::tags::TagRow;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,6 +191,32 @@ pub fn has_any_label(conn: &Connection, doc_id: i64, tag_id: i64) -> Result<bool
     .map_err(StorageError::from)
 }
 
+/// The current `(state, confidence, model_version)` of `(doc_id,
+/// tag_id)`'s label, if any - used by full automation (SPEC 7.6) to reuse
+/// an already-decided tag's state/score without re-scoring it.
+pub fn get_label(
+    conn: &Connection,
+    doc_id: i64,
+    tag_id: i64,
+) -> Result<Option<(LabelState, Option<f32>, Option<String>)>, StorageError> {
+    conn.query_row(
+        "SELECT state, confidence, model_version FROM labels WHERE doc_id = ?1 AND tag_id = ?2",
+        params![doc_id, tag_id],
+        |row| {
+            let state: String = row.get(0)?;
+            let confidence: Option<f64> = row.get(1)?;
+            let model_version: Option<String> = row.get(2)?;
+            Ok((
+                if state == "pos" { LabelState::Pos } else { LabelState::Neg },
+                confidence.map(|c| c as f32),
+                model_version,
+            ))
+        },
+    )
+    .optional()
+    .map_err(StorageError::from)
+}
+
 /// Tag IDs this document currently has an *automatic* label for - called
 /// right before `validate_document` overwrites them, to know which tags
 /// this validation is about to audit (SPEC 7.5).
@@ -349,6 +375,20 @@ mod tests {
         assert_eq!(state, "pos");
         assert_eq!(source, "auto");
         assert!((confidence - 0.87).abs() < 1e-6);
+    }
+
+    #[test]
+    fn get_label_returns_state_and_confidence_or_none() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, _solar) = setup(&conn);
+
+        assert_eq!(get_label(&conn, doc_id, battery.id).unwrap(), None);
+
+        write_automatic_label(&conn, doc_id, battery.id, 0.87, "model@v1", 1, NOW).unwrap();
+        let (state, confidence, model_version) = get_label(&conn, doc_id, battery.id).unwrap().unwrap();
+        assert_eq!(state, LabelState::Pos);
+        assert!((confidence.unwrap() - 0.87).abs() < 1e-6);
+        assert_eq!(model_version.as_deref(), Some("model@v1"));
     }
 
     #[test]

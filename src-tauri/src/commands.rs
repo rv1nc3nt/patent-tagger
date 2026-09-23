@@ -75,10 +75,11 @@ pub async fn run_import_jobs(
     .await;
 
     // Newly fetched documents may already qualify for an automatic
-    // decision under a tag that's already in automatic mode (SPEC 7.5).
+    // decision under a tag that's already in automatic mode (SPEC 7.5),
+    // or even full auto-completion if enabled (SPEC 7.6).
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
-        crate::automation::apply_pending_automatic_labels(&conn, &model.0, &current_timestamp())
+        crate::automation::apply_full_automation(&conn, &model.0, &current_timestamp())
             .map_err(|e| e.to_string())?;
     }
     Ok(outcomes)
@@ -210,7 +211,7 @@ pub fn enable_automatic_mode(state: State<Db>, model: State<Model>, tag_id: i64)
     tags::set_threshold(&conn, tag_id, eligibility.calibrated_threshold).map_err(|e| e.to_string())?;
     tags::set_auto_enabled(&conn, tag_id, true).map_err(|e| e.to_string())?;
 
-    crate::automation::apply_pending_automatic_labels(&conn, &model.0, &current_timestamp())
+    crate::automation::apply_full_automation(&conn, &model.0, &current_timestamp())
         .map_err(|e| e.to_string())?;
 
     tags::get(&conn, tag_id)
@@ -308,19 +309,32 @@ pub fn validate_document(
     enqueue_retrieval_after_tagging(&conn, doc_id, &checked, &now).map_err(|e| e.to_string())?;
 
     let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    let target_recall = core_lib::settings::target_recall(&conn).map_err(|e| e.to_string())?;
     let mut auto_disabled_tags = Vec::new();
     for tag in &active_tags {
-        if previously_auto.contains(&tag.id)
-            && crate::automation::check_and_disable_if_below_target(&conn, tag.id, target_precision)
-                .map_err(|e| e.to_string())?
-        {
+        if !previously_auto.contains(&tag.id) {
+            continue;
+        }
+        let disabled = crate::automation::check_and_disable_if_below_target(&conn, tag.id, target_precision)
+            .map_err(|e| e.to_string())?;
+        // Suspension (SPEC 7.6) only matters for a tag the first check
+        // didn't already disable - both flip the same `auto_enabled` flag.
+        let suspended = !disabled
+            && crate::automation::check_and_suspend_for_full_automation(
+                &conn,
+                tag.id,
+                target_precision,
+                target_recall,
+            )
+            .map_err(|e| e.to_string())?;
+        if disabled || suspended {
             auto_disabled_tags.push(tag.name.clone());
         }
     }
 
     if crate::retrain::is_scheduled_retrain_point(&conn).map_err(|e| e.to_string())? {
         crate::retrain::retrain_eligible_tags(&conn, &model.0, &now).map_err(|e| e.to_string())?;
-        crate::automation::apply_pending_automatic_labels(&conn, &model.0, &now).map_err(|e| e.to_string())?;
+        crate::automation::apply_full_automation(&conn, &model.0, &now).map_err(|e| e.to_string())?;
     }
 
     Ok(ValidateResult { auto_disabled_tags })

@@ -179,6 +179,17 @@ pub fn mark_not_found(conn: &Connection, doc_id: i64) -> Result<(), StorageError
     Ok(())
 }
 
+/// SPEC 7.6: a document that every non-archived tag could be confidently
+/// decided for (all labels already written as `source = auto` by the
+/// caller) skips the review queue entirely.
+pub fn mark_auto_completed(conn: &Connection, doc_id: i64) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE documents SET review_state = 'auto_completed' WHERE id = ?1",
+        params![doc_id],
+    )?;
+    Ok(())
+}
+
 pub fn find_by_pub_key(
     conn: &Connection,
     pub_key: &str,
@@ -365,6 +376,15 @@ mod tests {
 
         let doc = find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
         assert_eq!(doc.fetch_status, "error");
+    }
+
+    #[test]
+    fn mark_auto_completed_sets_the_review_state() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let doc_id = insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z").unwrap().unwrap();
+        mark_auto_completed(&conn, doc_id).unwrap();
+        let doc = find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        assert_eq!(doc.review_state, "auto_completed");
     }
 
     #[test]

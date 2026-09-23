@@ -139,17 +139,17 @@
       <label>
         Target recall
         <input type="number" step="0.01" min="0" max="1" bind:value={settings.target_recall} />
-        <span class="note">Used for confident-absence calibration (M9).</span>
+        <span class="note">Used to calibrate each tag's confident-absence threshold.</span>
       </label>
       <label>
         Audit rate
         <input type="number" step="0.01" min="0" max="1" bind:value={settings.audit_rate} />
-        <span class="note">Fraction of auto-completed documents double-checked (M9).</span>
+        <span class="note">Fraction of auto-completed documents routed to review as a full check.</span>
       </label>
       <label class="checkbox">
         <input type="checkbox" bind:checked={settings.full_automation_enabled} />
         Full automation
-        <span class="note">Has no effect yet (M9); requires at least one tag in automatic mode.</span>
+        <span class="note">Requires at least one tag in automatic mode. Documents where every tag can be confidently decided skip review entirely.</span>
       </label>
     </section>
 

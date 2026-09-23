@@ -20,6 +20,7 @@ pub fn retrain_eligible_tags(
     now: &str,
 ) -> Result<usize, storage::StorageError> {
     let target_precision = settings::target_precision(conn)?;
+    let target_recall = settings::target_recall(conn)?;
     let mut retrained = 0;
     for tag in tags::list_active(conn)? {
         let samples = embeddings::training_samples_for_tag(conn, tag.id, embedder.model_id())?;
@@ -30,6 +31,11 @@ pub fn retrain_eligible_tags(
 
         let calibrated = predictions::calibrate_threshold(conn, tag.id, target_precision)?;
         tags::set_threshold(conn, tag.id, calibrated)?;
+
+        // SPEC 7.6: neg_threshold calibration, same cadence as the
+        // ordinary threshold - both come from the same prequential window.
+        let neg_calibrated = predictions::calibrate_neg_threshold(conn, tag.id, target_recall)?;
+        tags::set_neg_threshold(conn, tag.id, neg_calibrated)?;
     }
     Ok(retrained)
 }
