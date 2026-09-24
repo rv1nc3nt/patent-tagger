@@ -35,9 +35,16 @@ pub fn open_in_memory() -> Result<Connection, StorageError> {
     Ok(conn)
 }
 
+/// How long a connection waits on another process's write lock.
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn apply_pragmas(conn: &Connection) -> Result<(), StorageError> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
+    // SPEC 7.7: a scheduled command-line import and the GUI can hold the
+    // same database file open at once; wait for the other's write
+    // transaction instead of failing immediately with SQLITE_BUSY.
+    conn.busy_timeout(BUSY_TIMEOUT)?;
     Ok(())
 }
 
