@@ -212,7 +212,7 @@ Rules applied on import:
 - A hotkey that is reserved (`J`, `K`, `S`, `/`), longer than one character, or already used by an active tag is dropped. The tag is still created without it.
 - A parent that doesn't exist or would create a cycle is ignored, and the tag is placed at the top level.
 - Both cases are listed in the message shown after the import.
-- `name` and `definition` must not be empty. An entry with an empty `name` or `definition` stops the import with an error. Tags earlier in the file will already have been created.
+- `name` and `definition` must not be empty. If any entry has an empty `name` or `definition`, the import fails with an error and no tag from the file is created.
 
 ## 10. Command-line mode
 

@@ -161,8 +161,20 @@ pub struct SchemaImport {
 /// Add-only schema import (SPEC section 8): entries whose name already
 /// exists are skipped, so an existing tag's learned state is never touched.
 /// Parents are resolved by name once every new tag exists, so an entry may
-/// name a parent that comes later in the file.
+/// name a parent that comes later in the file. The import is all or
+/// nothing: an invalid entry (e.g. an empty definition) creates no tags.
 pub fn import_schema(
+    conn: &Connection,
+    schema: &[TagSchema],
+    created_at: &str,
+) -> Result<SchemaImport, TagError> {
+    let tx = conn.unchecked_transaction().map_err(StorageError::from)?;
+    let outcome = import_schema_entries(&tx, schema, created_at)?;
+    tx.commit().map_err(StorageError::from)?;
+    Ok(outcome)
+}
+
+fn import_schema_entries(
     conn: &Connection,
     schema: &[TagSchema],
     created_at: &str,
@@ -977,5 +989,18 @@ mod tests {
             find_by_name(&conn, "Battery").unwrap().unwrap().hotkey,
             None
         );
+    }
+
+    #[test]
+    fn import_schema_creates_nothing_when_an_entry_is_invalid() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let mut invalid = schema_entry("Empty", None, None);
+        invalid.definition = "  ".to_string();
+        let schema = vec![schema_entry("Battery", None, None), invalid];
+        assert!(matches!(
+            import_schema(&conn, &schema, NOW),
+            Err(TagError::EmptyDefinition)
+        ));
+        assert_eq!(find_by_name(&conn, "Battery").unwrap(), None);
     }
 }
