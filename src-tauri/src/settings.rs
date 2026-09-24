@@ -144,7 +144,7 @@ pub fn import_tag_schema(
     let outcome = tags::import_schema(&conn, &schema, &now).map_err(|e| e.to_string())?;
     for &tag_id in &outcome.created {
         if let Some(tag) = tags::get(&conn, tag_id).map_err(|e| e.to_string())? {
-            crate::tag_screen::embed_tag(&conn, &model.0, &tag).map_err(|e| e.to_string())?;
+            crate::tag_screen::embed_saved_tag(&conn, &model.0, &tag);
         }
     }
     Ok(outcome)

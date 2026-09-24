@@ -12,28 +12,28 @@ use serde::Serialize;
 use std::collections::HashSet;
 use tauri::State;
 
-/// Computes and stores the tag's `"{name}: {definition}"` embedding for
-/// its current version (SPEC 7.2), so zero-shot scoring never has to fall
-/// back to computing it lazily during review.
-pub(crate) fn embed_tag(
-    conn: &Connection,
-    embedder: &impl Embedder,
-    tag: &TagRow,
-) -> Result<(), String> {
+/// Computes the tag's `"{name}: {definition}"` embedding (SPEC 7.2), or
+/// `None` if the embedder fails.
+pub(crate) fn compute_tag_embedding(embedder: &impl Embedder, tag: &TagRow) -> Option<Vec<f32>> {
     let text = format!("{}: {}", tag.name, tag.definition);
-    let vector = embedder
-        .embed(&[text])
-        .map_err(|e| e.to_string())?
-        .pop()
-        .ok_or("embedder returned no vector")?;
-    core_lib::embeddings::store_tag_embedding(
-        conn,
-        tag.id,
-        embedder.model_id(),
-        tag.version,
-        &vector,
-    )
-    .map_err(|e| e.to_string())
+    embedder.embed(&[text]).ok()?.pop()
+}
+
+/// Computes and stores the tag's embedding for its current version right
+/// after the tag was saved, so zero-shot scoring rarely has to compute it
+/// during review. The tag is already saved, so a failure here is not
+/// reported as a failed save: `review::score_one_tag` computes a missing
+/// embedding the next time the tag is scored.
+pub(crate) fn embed_saved_tag(conn: &Connection, embedder: &impl Embedder, tag: &TagRow) {
+    if let Some(vector) = compute_tag_embedding(embedder, tag) {
+        let _ = core_lib::embeddings::store_tag_embedding(
+            conn,
+            tag.id,
+            embedder.model_id(),
+            tag.version,
+            &vector,
+        );
+    }
 }
 
 #[tauri::command]
@@ -103,7 +103,7 @@ pub fn create_tag(
     let tag = tags::get(&conn, id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "tag vanished immediately after creation".to_string())?;
-    embed_tag(&conn, &model.0, &tag)?;
+    embed_saved_tag(&conn, &model.0, &tag);
     Ok(tag)
 }
 
@@ -132,7 +132,7 @@ pub fn update_tag(
     };
     let updated = tags::update(&conn, tag_id, fields, bump_version).map_err(|e| e.to_string())?;
     if updated.needs_embedding {
-        embed_tag(&conn, &model.0, &updated.tag)?;
+        embed_saved_tag(&conn, &model.0, &updated.tag);
     }
     Ok(updated.tag)
 }
@@ -416,6 +416,55 @@ mod tests {
         assert_eq!(prediction_count(&conn, doc_id), 0);
         let (state, _, _) = labels::get_label(&conn, doc_id, tag_id).unwrap().unwrap();
         assert_eq!(state, LabelState::Pos);
+    }
+
+    /// Embeds every text as "up", or fails when `fail` is set.
+    struct UpEmbedder {
+        fail: bool,
+    }
+    impl Embedder for UpEmbedder {
+        fn model_id(&self) -> &str {
+            "direction-model@v1"
+        }
+        fn dim(&self) -> usize {
+            2
+        }
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, embed_lib::EmbedError> {
+            if self.fail {
+                return Err(embed_lib::EmbedError::Tokenizer("unavailable".to_string()));
+            }
+            Ok(texts.iter().map(|_| vec![0.0, 1.0]).collect())
+        }
+    }
+
+    #[test]
+    fn scoring_computes_and_stores_a_missing_tag_embedding() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        validated_doc(&conn, "EP1", &[0.0, 1.0]);
+
+        let queue = review_queue_for(&conn, &UpEmbedder { fail: false }, tag_id).unwrap();
+
+        assert!(queue[0].score.is_some());
+        assert_eq!(
+            embeddings::get_tag_embedding(&conn, tag_id, "direction-model@v1", 1).unwrap(),
+            Some(vec![0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn scoring_without_a_tag_embedding_survives_an_embedder_failure() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        validated_doc(&conn, "EP1", &[0.0, 1.0]);
+
+        let queue = review_queue_for(&conn, &UpEmbedder { fail: true }, tag_id).unwrap();
+
+        assert_eq!(queue[0].score, None);
+        assert_eq!(
+            embeddings::get_tag_embedding(&conn, tag_id, "direction-model@v1", 1).unwrap(),
+            None
+        );
     }
 
     #[test]

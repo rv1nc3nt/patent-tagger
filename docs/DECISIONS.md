@@ -250,3 +250,9 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - **Automatic-mode toggle** moved from the Metrics screen to the Tags screen. Metrics shows eligibility read-only.
 - **Unarchive** is not in the SPEC. At the user's request it was added to SPEC 8 and implemented: the tag becomes active again, and documents validated while it was archived are unknown for it, so they appear in its review queue.
 - When a human label replaces an automatic one, it clears the automatic label's `confidence` and `model_version`.
+
+## 2026-09-24 — A missing tag embedding is computed when the tag is scored
+
+**Question:** A tag's zero-shot embedding is computed right after the tag is saved (create, edit, tag-schema import). If that step failed, the tag was saved without an embedding and never got a zero-shot score, and the command reported an error for a save that had succeeded (the Tags form then stayed in "new" mode, so saving again failed with a duplicate name).
+
+**Decision:** `review::score_one_tag` computes and stores the embedding when none exists for the tag's current version and the active model. This also covers a future change of embedding model. If the embedder fails there, the tag has no zero-shot score for that pass, as before, and the next scoring retries. Embedding right after a save is kept as the fast path, but its failure no longer fails the save.

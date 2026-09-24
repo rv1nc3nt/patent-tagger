@@ -54,7 +54,7 @@ pub fn score_one_tag(
     let n_pos = core_lib::tags::count_human_positives(conn, tag.id)?;
 
     let zero_shot = if n_pos < scoring::ZERO_SHOT_POSITIVE_CEILING {
-        embeddings::get_tag_embedding(conn, tag.id, embedder.model_id(), tag.version)?
+        tag_embedding(conn, embedder, tag)?
             .map(|tag_vector| scoring::zero_shot_score(doc_vector, &tag_vector))
     } else {
         None
@@ -82,6 +82,27 @@ pub fn score_one_tag(
         Some((score, source)) => Ok((Some(score), Some(source), model_version)),
         None => Ok((None, None, model_version)),
     }
+}
+
+/// The tag's embedding for its current version. One is missing when
+/// embedding failed after the tag was saved, or for a new embedding model:
+/// it is computed and stored now. If the embedder fails again, the tag has
+/// no zero-shot score this time.
+fn tag_embedding(
+    conn: &Connection,
+    embedder: &impl Embedder,
+    tag: &TagRow,
+) -> Result<Option<Vec<f32>>, storage::StorageError> {
+    if let Some(vector) =
+        embeddings::get_tag_embedding(conn, tag.id, embedder.model_id(), tag.version)?
+    {
+        return Ok(Some(vector));
+    }
+    let Some(vector) = crate::tag_screen::compute_tag_embedding(embedder, tag) else {
+        return Ok(None);
+    };
+    embeddings::store_tag_embedding(conn, tag.id, embedder.model_id(), tag.version, &vector)?;
+    Ok(Some(vector))
 }
 
 /// Whether a score alone pre-checks the tag: at or above its calibrated
