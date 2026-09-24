@@ -49,14 +49,20 @@ pub fn apply_pending_automatic_labels(
     now: &str,
 ) -> Result<usize, storage::StorageError> {
     let mut applied = 0;
-    for tag in tags::list_active(conn)?.into_iter().filter(|t| t.auto_enabled) {
-        let Some(threshold) = tag.threshold else { continue };
+    for tag in tags::list_active(conn)?
+        .into_iter()
+        .filter(|t| t.auto_enabled)
+    {
+        let Some(threshold) = tag.threshold else {
+            continue;
+        };
 
         for doc in documents::list_queue(conn)? {
             if labels::has_any_label(conn, doc.id, tag.id)? {
                 continue;
             }
-            let Some(doc_vector) = embeddings::get_document_embedding(conn, doc.id, embedder.model_id())?
+            let Some(doc_vector) =
+                embeddings::get_document_embedding(conn, doc.id, embedder.model_id())?
             else {
                 continue;
             };
@@ -106,7 +112,8 @@ pub fn check_and_suspend_for_full_automation(
     }
     let (precision, recall, n) = audit::auto_completion_audit(conn, tag_id)?;
     let should_suspend = n >= MIN_AUDITED_BEFORE_JUDGING
-        && (precision.is_some_and(|p| p < target_precision) || recall.is_some_and(|r| r < target_recall));
+        && (precision.is_some_and(|p| p < target_precision)
+            || recall.is_some_and(|r| r < target_recall));
     if should_suspend {
         tags::set_auto_enabled(conn, tag_id, false)?;
     }
@@ -149,7 +156,9 @@ pub fn apply_full_automation(
         let mut scores: Vec<(i64, Option<f32>, String)> = Vec::with_capacity(active_tags.len());
 
         for tag in &active_tags {
-            if let Some((state, confidence, model_version)) = labels::get_label(conn, doc.id, tag.id)? {
+            if let Some((state, confidence, model_version)) =
+                labels::get_label(conn, doc.id, tag.id)?
+            {
                 let decision = match state {
                     labels::LabelState::Pos => TagDecision::Pos,
                     labels::LabelState::Neg => TagDecision::Neg,
@@ -165,7 +174,9 @@ pub fn apply_full_automation(
                 continue;
             }
 
-            let Some(doc_vector) = embeddings::get_document_embedding(conn, doc.id, embedder.model_id())? else {
+            let Some(doc_vector) =
+                embeddings::get_document_embedding(conn, doc.id, embedder.model_id())?
+            else {
                 decisions.push(TagDecision::Uncertain);
                 scores.push((tag.id, None, String::new()));
                 continue;
@@ -176,7 +187,15 @@ pub fn apply_full_automation(
             let decision = full_automation::decide_tag(tag, score);
             if decision == TagDecision::Neg {
                 if let Some(s) = score {
-                    labels::write_automatic_neg_label(conn, doc.id, tag.id, s, &model_version, tag.version, now)?;
+                    labels::write_automatic_neg_label(
+                        conn,
+                        doc.id,
+                        tag.id,
+                        s,
+                        &model_version,
+                        tag.version,
+                        now,
+                    )?;
                 }
             }
             decisions.push(decision);
@@ -198,7 +217,15 @@ pub fn apply_full_automation(
         // docs/DECISIONS.md) even though no human ever validates it.
         for (tag_id, score, model_version) in &scores {
             if let Some(score) = score {
-                core_lib::predictions::record(conn, doc.id, *tag_id, model_version, *score, true, now)?;
+                core_lib::predictions::record(
+                    conn,
+                    doc.id,
+                    *tag_id,
+                    model_version,
+                    *score,
+                    true,
+                    now,
+                )?;
             }
         }
         documents::mark_auto_completed(conn, doc.id)?;
@@ -260,7 +287,9 @@ mod tests {
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
 
         documents::insert_pending(&conn, "EP0000001", "EP0000001", NOW).unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
         core_lib::documents::store_fetched(
             &conn,
             doc.id,
@@ -308,9 +337,17 @@ mod tests {
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
 
         documents::insert_pending(&conn, "EP0000001", "EP0000001", NOW).unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
-        core_lib::labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &HashSet::new(), NOW)
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
             .unwrap();
+        core_lib::labels::validate_document(
+            &conn,
+            doc.id,
+            std::slice::from_ref(&tag),
+            &HashSet::new(),
+            NOW,
+        )
+        .unwrap();
 
         // Not even scored (no embedding stored), but more importantly
         // `has_any_label` should already skip it before that matters.
@@ -323,7 +360,11 @@ mod tests {
         documents::insert_pending(conn, pub_key, pub_key, NOW).unwrap();
         let doc = documents::find_by_pub_key(conn, pub_key).unwrap().unwrap();
         labels::write_automatic_label(conn, doc.id, tag.id, 0.9, "model@v1", 1, NOW).unwrap();
-        let checked: HashSet<i64> = if human_confirms { [tag.id].into_iter().collect() } else { HashSet::new() };
+        let checked: HashSet<i64> = if human_confirms {
+            [tag.id].into_iter().collect()
+        } else {
+            HashSet::new()
+        };
         labels::validate_document(conn, doc.id, std::slice::from_ref(tag), &checked, NOW).unwrap();
     }
 
@@ -381,12 +422,20 @@ mod tests {
         assert!(tags::get(&conn, tag_id).unwrap().unwrap().auto_enabled);
     }
 
-    fn auto_neg_then_human(conn: &Connection, pub_key: &str, tag: &tags::TagRow, human_confirms_neg: bool) {
+    fn auto_neg_then_human(
+        conn: &Connection,
+        pub_key: &str,
+        tag: &tags::TagRow,
+        human_confirms_neg: bool,
+    ) {
         documents::insert_pending(conn, pub_key, pub_key, NOW).unwrap();
         let doc = documents::find_by_pub_key(conn, pub_key).unwrap().unwrap();
         labels::write_automatic_neg_label(conn, doc.id, tag.id, 0.05, "model@v1", 1, NOW).unwrap();
-        let checked: HashSet<i64> =
-            if human_confirms_neg { HashSet::new() } else { [tag.id].into_iter().collect() };
+        let checked: HashSet<i64> = if human_confirms_neg {
+            HashSet::new()
+        } else {
+            [tag.id].into_iter().collect()
+        };
         labels::validate_document(conn, doc.id, std::slice::from_ref(tag), &checked, NOW).unwrap();
     }
 
@@ -471,7 +520,8 @@ mod tests {
         tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
-        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0])
+            .unwrap();
 
         // Score near -1 for the tag direction, comfortably below any
         // neg_threshold once scored - but full automation is off, so no
@@ -481,7 +531,9 @@ mod tests {
         let summary = apply_full_automation(&conn, &DirectionEmbedder, NOW).unwrap();
         assert_eq!(summary, FullAutomationSummary::default());
 
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
         assert_eq!(doc.review_state, "queued");
     }
 
@@ -495,7 +547,8 @@ mod tests {
         tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
-        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0])
+            .unwrap();
 
         let doc_id = fetched_doc_with_embedding(&conn, "EP0000001", &[0.0, -1.0]);
 
@@ -503,7 +556,9 @@ mod tests {
         assert_eq!(summary.auto_completed, 1);
         assert_eq!(summary.audited_samples, 0);
 
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
         assert_eq!(doc.review_state, "auto_completed");
 
         let (state, _, _) = labels::get_label(&conn, doc_id, tag_id).unwrap().unwrap();
@@ -514,7 +569,10 @@ mod tests {
         // indicator, which just replays recorded scores (see
         // docs/DECISIONS.md).
         let readiness = full_automation::auto_completion_readiness(&conn).unwrap();
-        assert_eq!(readiness.total, 1, "the auto-completed document's score should be recorded");
+        assert_eq!(
+            readiness.total, 1,
+            "the auto-completed document's score should be recorded"
+        );
         assert_eq!(readiness.would_auto_complete, 1);
     }
 
@@ -523,20 +581,28 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         settings::set(&conn, settings::FULL_AUTOMATION_ENABLED_KEY, "true").unwrap();
         settings::set(&conn, settings::AUDIT_RATE_KEY, "0").unwrap();
-        settings::set(&conn, core_lib::settings::FULLTEXT_POLICY_KEY, "after_tagging_all").unwrap();
+        settings::set(
+            &conn,
+            core_lib::settings::FULLTEXT_POLICY_KEY,
+            "after_tagging_all",
+        )
+        .unwrap();
 
         let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
         tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
-        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0])
+            .unwrap();
 
         let doc_id = fetched_doc_with_embedding(&conn, "EP0000001", &[0.0, 1.0]);
 
         let summary = apply_full_automation(&conn, &DirectionEmbedder, NOW).unwrap();
         assert_eq!(summary.auto_completed, 1);
 
-        let jobs = core_lib::jobs::list_resumable(&conn, crate::retrieval_worker::FULLTEXT_JOB_KIND).unwrap();
+        let jobs =
+            core_lib::jobs::list_resumable(&conn, crate::retrieval_worker::FULLTEXT_JOB_KIND)
+                .unwrap();
         assert_eq!(jobs.len(), 1);
         let payload: serde_json::Value = serde_json::from_str(&jobs[0].payload).unwrap();
         assert_eq!(payload["doc_id"].as_i64(), Some(doc_id));
@@ -552,7 +618,8 @@ mod tests {
         tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
-        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+        embeddings::store_tag_embedding(&conn, tag_id, "direction-model@v1", 1, &[0.0, 1.0])
+            .unwrap();
 
         fetched_doc_with_embedding(&conn, "EP0000001", &[0.0, -1.0]);
 
@@ -560,8 +627,13 @@ mod tests {
         assert_eq!(summary.auto_completed, 0);
         assert_eq!(summary.audited_samples, 1);
 
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
-        assert_eq!(doc.review_state, "queued", "an audit-sampled document stays in the queue for full review");
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            doc.review_state, "queued",
+            "an audit-sampled document stays in the queue for full review"
+        );
     }
 
     #[test]
@@ -569,11 +641,13 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         settings::set(&conn, settings::FULL_AUTOMATION_ENABLED_KEY, "true").unwrap();
 
-        let auto_tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let auto_tag_id =
+            tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
         tags::set_threshold(&conn, auto_tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, auto_tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, auto_tag_id, true).unwrap();
-        embeddings::store_tag_embedding(&conn, auto_tag_id, "direction-model@v1", 1, &[0.0, 1.0]).unwrap();
+        embeddings::store_tag_embedding(&conn, auto_tag_id, "direction-model@v1", 1, &[0.0, 1.0])
+            .unwrap();
 
         // A second, brand-new tag not yet in automatic mode - SPEC 7.6:
         // "creating a tag stops auto-completion until eligible."
@@ -584,7 +658,9 @@ mod tests {
         let summary = apply_full_automation(&conn, &DirectionEmbedder, NOW).unwrap();
         assert_eq!(summary.auto_completed, 0);
 
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
         assert_eq!(doc.review_state, "queued");
     }
 }

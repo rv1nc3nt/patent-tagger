@@ -27,7 +27,8 @@ pub trait Embedder {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError>;
 }
 
-const MODEL_SAFETENSORS: &[u8] = include_bytes!(concat!(env!("MODEL_DIR"), "/model_f16.safetensors"));
+const MODEL_SAFETENSORS: &[u8] =
+    include_bytes!(concat!(env!("MODEL_DIR"), "/model_f16.safetensors"));
 const TOKENIZER_JSON: &[u8] = include_bytes!(concat!(env!("MODEL_DIR"), "/tokenizer.json"));
 const CONFIG_JSON: &str = include_str!(concat!(env!("MODEL_DIR"), "/config.json"));
 
@@ -47,11 +48,12 @@ impl BgeSmallEmbedder {
         let config: BertConfig = serde_json::from_str(CONFIG_JSON)?;
         let device = Device::Cpu;
 
-        let vb = VarBuilder::from_buffered_safetensors(MODEL_SAFETENSORS.to_vec(), DType::F32, &device)?;
+        let vb =
+            VarBuilder::from_buffered_safetensors(MODEL_SAFETENSORS.to_vec(), DType::F32, &device)?;
         let model = BertModel::load(vb, &config)?;
 
-        let mut tokenizer =
-            Tokenizer::from_bytes(TOKENIZER_JSON).map_err(|e| EmbedError::Tokenizer(e.to_string()))?;
+        let mut tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON)
+            .map_err(|e| EmbedError::Tokenizer(e.to_string()))?;
         tokenizer
             .with_truncation(Some(TruncationParams {
                 max_length: 512,
@@ -60,7 +62,10 @@ impl BgeSmallEmbedder {
             .map_err(|e| EmbedError::Tokenizer(e.to_string()))?;
         tokenizer.with_padding(Some(PaddingParams::default()));
 
-        let model_id = format!("bge-small-en-v1.5-f16@{}", &hex_sha256(MODEL_SAFETENSORS)[..12]);
+        let model_id = format!(
+            "bge-small-en-v1.5-f16@{}",
+            &hex_sha256(MODEL_SAFETENSORS)[..12]
+        );
 
         Ok(Self {
             model,
@@ -106,7 +111,9 @@ impl Embedder for BgeSmallEmbedder {
         let token_type_ids = Tensor::from_vec(token_type_ids, shape, &self.device)?;
         let attention_mask = Tensor::from_vec(attention_mask, shape, &self.device)?;
 
-        let sequence_output = self.model.forward(&input_ids, &token_type_ids, Some(&attention_mask))?;
+        let sequence_output =
+            self.model
+                .forward(&input_ids, &token_type_ids, Some(&attention_mask))?;
 
         // CLS pooling (SPEC section 6): the first token of each sequence.
         let cls = sequence_output.narrow(1, 0, 1)?.squeeze(1)?;
@@ -120,7 +127,10 @@ impl Embedder for BgeSmallEmbedder {
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 #[cfg(test)]
@@ -140,7 +150,10 @@ mod tests {
         assert_eq!(vectors[0].len(), 384);
 
         let norm: f32 = vectors[0].iter().map(|x| x * x).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 1e-3, "expected L2-normalised output, got norm {norm}");
+        assert!(
+            (norm - 1.0).abs() < 1e-3,
+            "expected L2-normalised output, got norm {norm}"
+        );
     }
 
     #[test]
@@ -153,21 +166,34 @@ mod tests {
                 .to_string(),
         ];
 
-        let batched = embedder.embed(&texts).expect("batch embedding should succeed");
+        let batched = embedder
+            .embed(&texts)
+            .expect("batch embedding should succeed");
         let individually: Vec<Vec<f32>> = texts
             .iter()
-            .map(|t| embedder.embed(std::slice::from_ref(t)).expect("single embedding should succeed")[0].clone())
+            .map(|t| {
+                embedder
+                    .embed(std::slice::from_ref(t))
+                    .expect("single embedding should succeed")[0]
+                    .clone()
+            })
             .collect();
 
         for (b, i) in batched.iter().zip(individually.iter()) {
             let cosine: f32 = b.iter().zip(i.iter()).map(|(x, y)| x * y).sum();
-            assert!(cosine > 0.999, "batched vs individual cosine similarity was {cosine}");
+            assert!(
+                cosine > 0.999,
+                "batched vs individual cosine similarity was {cosine}"
+            );
         }
     }
 
     #[test]
     fn empty_input_returns_no_vectors() {
         let embedder = BgeSmallEmbedder::load().expect("model should load");
-        assert_eq!(embedder.embed(&[]).expect("should succeed"), Vec::<Vec<f32>>::new());
+        assert_eq!(
+            embedder.embed(&[]).expect("should succeed"),
+            Vec::<Vec<f32>>::new()
+        );
     }
 }

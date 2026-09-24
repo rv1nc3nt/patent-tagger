@@ -72,42 +72,112 @@ mod tests {
     #[test]
     fn retrain_recalibrates_thresholds_for_every_active_tag() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+        let tag_id = tags::create(
+            &conn,
+            "Battery",
+            "About batteries",
+            None,
+            None,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
         let tag = tags::get(&conn, tag_id).unwrap().unwrap();
-        assert_eq!(tag.threshold, None, "no threshold before any prequential data exists");
+        assert_eq!(
+            tag.threshold, None,
+            "no threshold before any prequential data exists"
+        );
 
         // Cleanly separated scores so a threshold reaching the default
         // 0.95 target precision is reachable.
         for i in 0..5 {
             let pub_key = format!("EPPOS{i:04}");
             documents::insert_pending(&conn, &pub_key, &pub_key, "2026-01-01T00:00:00Z").unwrap();
-            let doc = documents::find_by_pub_key(&conn, &pub_key).unwrap().unwrap();
-            predictions::record(&conn, doc.id, tag_id, "fake-model@v1", 0.9, true, "2026-01-01T00:00:00Z").unwrap();
-            labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &[tag_id].into_iter().collect(), "2026-01-01T00:00:00Z").unwrap();
+            let doc = documents::find_by_pub_key(&conn, &pub_key)
+                .unwrap()
+                .unwrap();
+            predictions::record(
+                &conn,
+                doc.id,
+                tag_id,
+                "fake-model@v1",
+                0.9,
+                true,
+                "2026-01-01T00:00:00Z",
+            )
+            .unwrap();
+            labels::validate_document(
+                &conn,
+                doc.id,
+                std::slice::from_ref(&tag),
+                &[tag_id].into_iter().collect(),
+                "2026-01-01T00:00:00Z",
+            )
+            .unwrap();
         }
 
         retrain_eligible_tags(&conn, &FakeEmbedder, "2026-01-02T00:00:00Z").unwrap();
 
         let recalibrated = tags::get(&conn, tag_id).unwrap().unwrap();
-        assert!(recalibrated.threshold.is_some(), "threshold should now be calibrated");
+        assert!(
+            recalibrated.threshold.is_some(),
+            "threshold should now be calibrated"
+        );
     }
 
     #[test]
     fn scheduled_retrain_point_is_every_tenth_validation() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+        let tag_id = tags::create(
+            &conn,
+            "Battery",
+            "About batteries",
+            None,
+            None,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
         let tag = tags::get(&conn, tag_id).unwrap().unwrap();
 
         for i in 0..9 {
-            documents::insert_pending(&conn, &format!("EP{i:07}"), &format!("EP{i:07}"), "2026-01-01T00:00:00Z").unwrap();
-            let doc = documents::find_by_pub_key(&conn, &format!("EP{i:07}")).unwrap().unwrap();
-            labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &HashSet::new(), "2026-01-01T00:00:00Z").unwrap();
-            assert!(!is_scheduled_retrain_point(&conn).unwrap(), "should not trigger before the 10th");
+            documents::insert_pending(
+                &conn,
+                &format!("EP{i:07}"),
+                &format!("EP{i:07}"),
+                "2026-01-01T00:00:00Z",
+            )
+            .unwrap();
+            let doc = documents::find_by_pub_key(&conn, &format!("EP{i:07}"))
+                .unwrap()
+                .unwrap();
+            labels::validate_document(
+                &conn,
+                doc.id,
+                std::slice::from_ref(&tag),
+                &HashSet::new(),
+                "2026-01-01T00:00:00Z",
+            )
+            .unwrap();
+            assert!(
+                !is_scheduled_retrain_point(&conn).unwrap(),
+                "should not trigger before the 10th"
+            );
         }
 
         documents::insert_pending(&conn, "EP9999999", "EP9999999", "2026-01-01T00:00:00Z").unwrap();
-        let tenth = documents::find_by_pub_key(&conn, "EP9999999").unwrap().unwrap();
-        labels::validate_document(&conn, tenth.id, std::slice::from_ref(&tag), &HashSet::new(), "2026-01-01T00:00:00Z").unwrap();
-        assert!(is_scheduled_retrain_point(&conn).unwrap(), "the 10th validation should trigger");
+        let tenth = documents::find_by_pub_key(&conn, "EP9999999")
+            .unwrap()
+            .unwrap();
+        labels::validate_document(
+            &conn,
+            tenth.id,
+            std::slice::from_ref(&tag),
+            &HashSet::new(),
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
+        assert!(
+            is_scheduled_retrain_point(&conn).unwrap(),
+            "the 10th validation should trigger"
+        );
     }
 }

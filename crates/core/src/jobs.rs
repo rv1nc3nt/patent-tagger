@@ -188,6 +188,9 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         let id = enqueue(&conn, "import_document", "{}", NOW).unwrap();
         retry(&conn, id, NOW).unwrap();
-        assert_eq!(list_resumable(&conn, "import_document").unwrap()[0].state, STATE_PENDING);
+        assert_eq!(
+            list_resumable(&conn, "import_document").unwrap()[0].state,
+            STATE_PENDING
+        );
     }
 }

@@ -63,7 +63,10 @@ pub fn list_validated_document_embeddings(
             Ok((doc_id, bytes))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows.into_iter().map(|(id, bytes)| (id, from_bytes(&bytes))).collect())
+    Ok(rows
+        .into_iter()
+        .map(|(id, bytes)| (id, from_bytes(&bytes)))
+        .collect())
 }
 
 /// `(embedding, is_positive)` for every document with a human label for
@@ -87,7 +90,10 @@ pub fn training_samples_for_tag(
             Ok((bytes, state == "pos"))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows.into_iter().map(|(bytes, is_pos)| (from_bytes(&bytes), is_pos)).collect())
+    Ok(rows
+        .into_iter()
+        .map(|(bytes, is_pos)| (from_bytes(&bytes), is_pos))
+        .collect())
 }
 
 pub fn store_tag_embedding(
@@ -132,11 +138,15 @@ mod tests {
     fn document_embedding_round_trips() {
         let conn = storage::open_in_memory().expect("in-memory db");
         documents::insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z").unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP1234567")
+            .unwrap()
+            .unwrap();
 
         let vector = vec![0.1, 0.2, 0.3];
         store_document_embedding(&conn, doc.id, MODEL, &vector).unwrap();
-        let loaded = get_document_embedding(&conn, doc.id, MODEL).unwrap().unwrap();
+        let loaded = get_document_embedding(&conn, doc.id, MODEL)
+            .unwrap()
+            .unwrap();
         assert_eq!(loaded, vector);
     }
 
@@ -146,18 +156,44 @@ mod tests {
         use std::collections::HashSet;
 
         let conn = storage::open_in_memory().expect("in-memory db");
-        let tag_id = crate::tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+        let tag_id = crate::tags::create(
+            &conn,
+            "Battery",
+            "About batteries",
+            None,
+            None,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
         let tag = crate::tags::get(&conn, tag_id).unwrap().unwrap();
 
         documents::insert_pending(&conn, "EP1111111", "EP1111111", "2026-01-01T00:00:00Z").unwrap();
-        let pos_doc = documents::find_by_pub_key(&conn, "EP1111111").unwrap().unwrap();
+        let pos_doc = documents::find_by_pub_key(&conn, "EP1111111")
+            .unwrap()
+            .unwrap();
         store_document_embedding(&conn, pos_doc.id, MODEL, &[1.0, 0.0]).unwrap();
-        labels::validate_document(&conn, pos_doc.id, &[tag.clone()], &[tag_id].into_iter().collect::<HashSet<_>>(), "2026-01-01T00:00:00Z").unwrap();
+        labels::validate_document(
+            &conn,
+            pos_doc.id,
+            &[tag.clone()],
+            &[tag_id].into_iter().collect::<HashSet<_>>(),
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
 
         documents::insert_pending(&conn, "EP2222222", "EP2222222", "2026-01-01T00:00:00Z").unwrap();
-        let neg_doc = documents::find_by_pub_key(&conn, "EP2222222").unwrap().unwrap();
+        let neg_doc = documents::find_by_pub_key(&conn, "EP2222222")
+            .unwrap()
+            .unwrap();
         store_document_embedding(&conn, neg_doc.id, MODEL, &[0.0, 1.0]).unwrap();
-        labels::validate_document(&conn, neg_doc.id, &[tag.clone()], &HashSet::new(), "2026-01-01T00:00:00Z").unwrap();
+        labels::validate_document(
+            &conn,
+            neg_doc.id,
+            &[tag.clone()],
+            &HashSet::new(),
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
 
         let samples = training_samples_for_tag(&conn, tag_id, MODEL).unwrap();
         assert_eq!(samples.len(), 2);
@@ -169,13 +205,17 @@ mod tests {
     fn storing_twice_overwrites_rather_than_erroring() {
         let conn = storage::open_in_memory().expect("in-memory db");
         documents::insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z").unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP1234567")
+            .unwrap()
+            .unwrap();
 
         store_document_embedding(&conn, doc.id, MODEL, &[1.0, 0.0]).unwrap();
         store_document_embedding(&conn, doc.id, MODEL, &[0.0, 1.0]).unwrap();
 
         assert_eq!(
-            get_document_embedding(&conn, doc.id, MODEL).unwrap().unwrap(),
+            get_document_embedding(&conn, doc.id, MODEL)
+                .unwrap()
+                .unwrap(),
             vec![0.0, 1.0]
         );
     }
@@ -185,8 +225,12 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         documents::insert_pending(&conn, "EP1111111", "EP1111111", "2026-01-01T00:00:00Z").unwrap();
         documents::insert_pending(&conn, "EP2222222", "EP2222222", "2026-01-01T00:00:00Z").unwrap();
-        let queued = documents::find_by_pub_key(&conn, "EP1111111").unwrap().unwrap();
-        let validated = documents::find_by_pub_key(&conn, "EP2222222").unwrap().unwrap();
+        let queued = documents::find_by_pub_key(&conn, "EP1111111")
+            .unwrap()
+            .unwrap();
+        let validated = documents::find_by_pub_key(&conn, "EP2222222")
+            .unwrap()
+            .unwrap();
         conn.execute(
             "UPDATE documents SET review_state = 'validated' WHERE id = ?1",
             params![validated.id],

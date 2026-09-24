@@ -55,7 +55,11 @@ pub fn export_tag_list(state: State<Db>, tag_id: i64, dest_path: String) -> Resu
 /// SPEC section 8's export format and, when retrieved, a `drawings/`
 /// subfolder of PNG pages copied from the data directory.
 #[tauri::command]
-pub fn export_documents(state: State<Db>, doc_ids: Vec<i64>, dest_dir: String) -> Result<usize, String> {
+pub fn export_documents(
+    state: State<Db>,
+    doc_ids: Vec<i64>,
+    dest_dir: String,
+) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let dest_dir = std::path::Path::new(&dest_dir);
     let mut exported = 0;
@@ -119,10 +123,19 @@ pub(crate) fn export_document_folder(
                 }
             }
         }
-        export::DocumentExportDrawings { status: s.status, page_paths, source: s.source }
+        export::DocumentExportDrawings {
+            status: s.status,
+            page_paths,
+            source: s.source,
+        }
     });
 
-    let text = export::document_txt(&detail, &tag_names, fulltext_export.as_ref(), drawings_export.as_ref());
+    let text = export::document_txt(
+        &detail,
+        &tag_names,
+        fulltext_export.as_ref(),
+        drawings_export.as_ref(),
+    );
     std::fs::write(folder.join(format!("{}.txt", detail.pub_key)), text)?;
     Ok(true)
 }
@@ -133,7 +146,11 @@ pub(crate) fn export_document_folder(
 /// drains the queue once, synchronously, so the caller's promise resolves
 /// once the batch is done.
 #[tauri::command]
-pub async fn bulk_retrieve(state: State<'_, Db>, doc_ids: Vec<i64>, kind: String) -> Result<(), String> {
+pub async fn bulk_retrieve(
+    state: State<'_, Db>,
+    doc_ids: Vec<i64>,
+    kind: String,
+) -> Result<(), String> {
     let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     let now = crate::commands::current_timestamp();
     {
@@ -144,7 +161,9 @@ pub async fn bulk_retrieve(state: State<'_, Db>, doc_ids: Vec<i64>, kind: String
                     let already_done = core_lib::fulltext::get(&conn, *doc_id)
                         .ok()
                         .flatten()
-                        .is_some_and(|f| matches!(f.status.as_str(), "fetched" | "non_english_only"));
+                        .is_some_and(|f| {
+                            matches!(f.status.as_str(), "fetched" | "non_english_only")
+                        });
                     if !already_done {
                         let _ = crate::retrieval_worker::enqueue_fulltext(&conn, *doc_id, &now);
                     }
@@ -170,7 +189,8 @@ pub async fn bulk_retrieve(state: State<'_, Db>, doc_ids: Vec<i64>, kind: String
     match kind.as_str() {
         "fulltext" => crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await,
         "drawings" => {
-            crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await
+            crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {})
+                .await
         }
         _ => {}
     }

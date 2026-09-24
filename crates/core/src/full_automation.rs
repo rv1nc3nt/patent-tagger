@@ -48,7 +48,10 @@ pub fn decide_tag(tag: &TagRow, score: Option<f32>) -> TagDecision {
 /// tag - an empty list (no active tags at all) is never auto-completed,
 /// since there is nothing to have confidently decided.
 pub fn would_auto_complete(decisions: &[TagDecision]) -> bool {
-    !decisions.is_empty() && decisions.iter().all(|d| matches!(d, TagDecision::Pos | TagDecision::Neg))
+    !decisions.is_empty()
+        && decisions
+            .iter()
+            .all(|d| matches!(d, TagDecision::Pos | TagDecision::Neg))
 }
 
 /// SPEC 7.6: "a fraction (default 5%) of auto-completed documents is
@@ -60,7 +63,9 @@ pub fn would_auto_complete(decisions: &[TagDecision]) -> bool {
 /// flip (`crates/ops` already depends on `rand` for jitter, but `crates/
 /// core` deliberately has no network/IO dependencies to keep minimal).
 pub fn is_sampled_for_audit(doc_id: i64, rate: f32) -> bool {
-    let h = (doc_id as u64).wrapping_mul(2_654_435_761).wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let h = (doc_id as u64)
+        .wrapping_mul(2_654_435_761)
+        .wrapping_add(0x9E37_79B9_7F4A_7C15);
     let h = (h ^ (h >> 15)).wrapping_mul(0x2545_F491_4F6C_DD1D);
     let unit = (h >> 32) as u32 as f32 / u32::MAX as f32;
     unit < rate
@@ -85,7 +90,9 @@ pub fn auto_completion_readiness(conn: &Connection) -> Result<ReadinessResult, S
         "SELECT doc_id FROM (SELECT doc_id, MAX(id) AS last_id FROM predictions GROUP BY doc_id)
          ORDER BY last_id DESC LIMIT 300",
     )?;
-    let doc_ids: Vec<i64> = doc_stmt.query_map([], |row| row.get(0))?.collect::<Result<_, _>>()?;
+    let doc_ids: Vec<i64> = doc_stmt
+        .query_map([], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
 
     let mut score_stmt = conn.prepare(
         "SELECT score FROM predictions WHERE doc_id = ?1 AND tag_id = ?2 ORDER BY id DESC LIMIT 1",
@@ -105,7 +112,10 @@ pub fn auto_completion_readiness(conn: &Connection) -> Result<ReadinessResult, S
         }
     }
 
-    Ok(ReadinessResult { would_auto_complete: would_auto_complete_count, total: doc_ids.len() as i64 })
+    Ok(ReadinessResult {
+        would_auto_complete: would_auto_complete_count,
+        total: doc_ids.len() as i64,
+    })
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
@@ -143,9 +153,14 @@ pub fn automation_state_counts(conn: &Connection) -> Result<AutomationStateCount
          ) AS auto_count
          FROM documents d WHERE d.fetch_status = 'fetched' AND d.review_state = 'queued'",
     )?;
-    let auto_counts: Vec<i64> = stmt.query_map([], |row| row.get(0))?.collect::<Result<_, _>>()?;
+    let auto_counts: Vec<i64> = stmt
+        .query_map([], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
 
-    let mut counts = AutomationStateCounts { auto_completed, ..Default::default() };
+    let mut counts = AutomationStateCounts {
+        auto_completed,
+        ..Default::default()
+    };
     for auto_count in auto_counts {
         if n_active_tags > 0 && auto_count == n_active_tags {
             counts.audited_or_complete += 1;
@@ -205,23 +220,41 @@ mod tests {
 
         // Not yet calibrated at all.
         let uncalibrated = tag_with(None, None, true);
-        assert_eq!(decide_tag(&uncalibrated, Some(0.99)), TagDecision::Uncertain);
+        assert_eq!(
+            decide_tag(&uncalibrated, Some(0.99)),
+            TagDecision::Uncertain
+        );
     }
 
     #[test]
     fn would_auto_complete_requires_every_tag_decided_and_none_uncertain() {
         assert!(would_auto_complete(&[TagDecision::Pos, TagDecision::Neg]));
-        assert!(!would_auto_complete(&[TagDecision::Pos, TagDecision::Uncertain]));
-        assert!(!would_auto_complete(&[TagDecision::Pos, TagDecision::NotAutomatic]));
-        assert!(!would_auto_complete(&[]), "no tags at all is never auto-completed");
+        assert!(!would_auto_complete(&[
+            TagDecision::Pos,
+            TagDecision::Uncertain
+        ]));
+        assert!(!would_auto_complete(&[
+            TagDecision::Pos,
+            TagDecision::NotAutomatic
+        ]));
+        assert!(
+            !would_auto_complete(&[]),
+            "no tags at all is never auto-completed"
+        );
     }
 
     #[test]
     fn audit_sampling_is_deterministic_and_roughly_matches_the_rate() {
         assert_eq!(is_sampled_for_audit(42, 0.1), is_sampled_for_audit(42, 0.1));
-        let sampled = (0..10_000).filter(|&id| is_sampled_for_audit(id, 0.05)).count();
+        let sampled = (0..10_000)
+            .filter(|&id| is_sampled_for_audit(id, 0.05))
+            .count();
         let fraction = sampled as f32 / 10_000.0;
-        assert!((fraction - 0.05).abs() < 0.01, "expected roughly 5%, got {:.3}", fraction);
+        assert!(
+            (fraction - 0.05).abs() < 0.01,
+            "expected roughly 5%, got {:.3}",
+            fraction
+        );
     }
 
     #[test]
@@ -262,20 +295,27 @@ mod tests {
         doc_with_score(&conn, "EPPOS0001", tag_id, 0.9);
 
         let before = auto_completion_readiness(&conn).unwrap();
-        assert_eq!(before.would_auto_complete, 0, "the tag isn't in automatic mode yet");
+        assert_eq!(
+            before.would_auto_complete, 0,
+            "the tag isn't in automatic mode yet"
+        );
 
         tags::set_threshold(&conn, tag_id, Some(0.8)).unwrap();
         tags::set_neg_threshold(&conn, tag_id, Some(0.2)).unwrap();
         tags::set_auto_enabled(&conn, tag_id, true).unwrap();
 
         let after = auto_completion_readiness(&conn).unwrap();
-        assert_eq!(after.would_auto_complete, 1, "replaying the same recorded score against the new settings");
+        assert_eq!(
+            after.would_auto_complete, 1,
+            "replaying the same recorded score against the new settings"
+        );
     }
 
     #[test]
     fn automation_state_counts_classifies_each_document() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let battery_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let battery_id =
+            tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
         let solar_id = tags::create(&conn, "Solar", "About solar", None, None, NOW).unwrap();
 
         let fetched = || documents::FetchedData {
@@ -286,26 +326,37 @@ mod tests {
         // Auto-completed: not in the queue at all, shouldn't be counted
         // as focused/audited.
         documents::insert_pending(&conn, "EPDONE0001", "EPDONE0001", NOW).unwrap();
-        let done = documents::find_by_pub_key(&conn, "EPDONE0001").unwrap().unwrap();
+        let done = documents::find_by_pub_key(&conn, "EPDONE0001")
+            .unwrap()
+            .unwrap();
         documents::mark_auto_completed(&conn, done.id).unwrap();
 
         // Fully auto-labelled but still queued (audit sample or awaiting
         // completion).
         documents::insert_pending(&conn, "EPFULL0001", "EPFULL0001", NOW).unwrap();
-        let full = documents::find_by_pub_key(&conn, "EPFULL0001").unwrap().unwrap();
+        let full = documents::find_by_pub_key(&conn, "EPFULL0001")
+            .unwrap()
+            .unwrap();
         documents::store_fetched(&conn, full.id, &fetched()).unwrap();
-        crate::labels::write_automatic_label(&conn, full.id, battery_id, 0.9, "m@v1", 1, NOW).unwrap();
-        crate::labels::write_automatic_neg_label(&conn, full.id, solar_id, 0.1, "m@v1", 1, NOW).unwrap();
+        crate::labels::write_automatic_label(&conn, full.id, battery_id, 0.9, "m@v1", 1, NOW)
+            .unwrap();
+        crate::labels::write_automatic_neg_label(&conn, full.id, solar_id, 0.1, "m@v1", 1, NOW)
+            .unwrap();
 
         // Partially auto-labelled (focused review).
         documents::insert_pending(&conn, "EPPART0001", "EPPART0001", NOW).unwrap();
-        let partial = documents::find_by_pub_key(&conn, "EPPART0001").unwrap().unwrap();
+        let partial = documents::find_by_pub_key(&conn, "EPPART0001")
+            .unwrap()
+            .unwrap();
         documents::store_fetched(&conn, partial.id, &fetched()).unwrap();
-        crate::labels::write_automatic_label(&conn, partial.id, battery_id, 0.9, "m@v1", 1, NOW).unwrap();
+        crate::labels::write_automatic_label(&conn, partial.id, battery_id, 0.9, "m@v1", 1, NOW)
+            .unwrap();
 
         // Plain queued, no automatic decisions at all.
         documents::insert_pending(&conn, "EPPLAIN0001", "EPPLAIN0001", NOW).unwrap();
-        let plain = documents::find_by_pub_key(&conn, "EPPLAIN0001").unwrap().unwrap();
+        let plain = documents::find_by_pub_key(&conn, "EPPLAIN0001")
+            .unwrap()
+            .unwrap();
         documents::store_fetched(&conn, plain.id, &fetched()).unwrap();
 
         let counts = automation_state_counts(&conn).unwrap();

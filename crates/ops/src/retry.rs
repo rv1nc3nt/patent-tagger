@@ -44,18 +44,9 @@ mod tests {
     fn backoff_grows_exponentially_before_the_cap() {
         let base = Duration::from_millis(100);
         let cap = Duration::from_secs(60);
-        assert_eq!(
-            backoff_delay(0, base, cap, 1.0),
-            Duration::from_millis(100)
-        );
-        assert_eq!(
-            backoff_delay(1, base, cap, 1.0),
-            Duration::from_millis(200)
-        );
-        assert_eq!(
-            backoff_delay(2, base, cap, 1.0),
-            Duration::from_millis(400)
-        );
+        assert_eq!(backoff_delay(0, base, cap, 1.0), Duration::from_millis(100));
+        assert_eq!(backoff_delay(1, base, cap, 1.0), Duration::from_millis(200));
+        assert_eq!(backoff_delay(2, base, cap, 1.0), Duration::from_millis(400));
     }
 
     #[test]
@@ -70,9 +61,6 @@ mod tests {
         let base = Duration::from_millis(100);
         let cap = Duration::from_secs(60);
         assert_eq!(backoff_delay(0, base, cap, 0.0), Duration::ZERO);
-        assert_eq!(
-            backoff_delay(0, base, cap, 0.5),
-            Duration::from_millis(50)
-        );
+        assert_eq!(backoff_delay(0, base, cap, 0.5), Duration::from_millis(50));
     }
 }

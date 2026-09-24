@@ -52,10 +52,11 @@ pub fn parse_inquiry(xml: &str) -> Result<Vec<FulltextInstance>, OpsError> {
 /// casing (`"EN"`).
 pub fn parse_description(xml: &str, lang: &str) -> Result<Option<(String, String)>, OpsError> {
     let doc = Document::parse(xml).map_err(|e| OpsError::Parse(format!("invalid XML: {e}")))?;
-    let Some(description) = doc
-        .descendants()
-        .find(|n| n.has_tag_name("description") && n.attribute("lang").is_some_and(|l| l.eq_ignore_ascii_case(lang)))
-    else {
+    let Some(description) = doc.descendants().find(|n| {
+        n.has_tag_name("description")
+            && n.attribute("lang")
+                .is_some_and(|l| l.eq_ignore_ascii_case(lang))
+    }) else {
         return Ok(None);
     };
     let lang = description.attribute("lang").unwrap_or("").to_string();
@@ -86,10 +87,11 @@ pub fn parse_description(xml: &str, lang: &str) -> Result<Option<(String, String
 /// Case-insensitive, matching OPS's own attribute casing (`"EN"`).
 pub fn parse_claims(xml: &str, lang: &str) -> Result<Option<(String, String)>, OpsError> {
     let doc = Document::parse(xml).map_err(|e| OpsError::Parse(format!("invalid XML: {e}")))?;
-    let Some(claims) = doc
-        .descendants()
-        .find(|n| n.has_tag_name("claims") && n.attribute("lang").is_some_and(|l| l.eq_ignore_ascii_case(lang)))
-    else {
+    let Some(claims) = doc.descendants().find(|n| {
+        n.has_tag_name("claims")
+            && n.attribute("lang")
+                .is_some_and(|l| l.eq_ignore_ascii_case(lang))
+    }) else {
         return Ok(None);
     };
     let lang = claims.attribute("lang").unwrap_or("").to_string();
@@ -143,7 +145,10 @@ fn non_text_kind(node: Node) -> Option<&'static str> {
 }
 
 fn text_content(node: Node) -> String {
-    node.descendants().filter_map(|n| n.text()).collect::<Vec<_>>().join("")
+    node.descendants()
+        .filter_map(|n| n.text())
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 fn normalise_whitespace(s: &str) -> String {
@@ -156,8 +161,11 @@ mod tests {
     use std::fs;
 
     fn fixture(name: &str) -> String {
-        fs::read_to_string(format!("{}/../../tests/fixtures/ops/{name}", env!("CARGO_MANIFEST_DIR")))
-            .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
+        fs::read_to_string(format!(
+            "{}/../../tests/fixtures/ops/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
     }
 
     #[test]
@@ -166,25 +174,37 @@ mod tests {
         assert_eq!(
             instances,
             vec![
-                FulltextInstance { lang: "EN".to_string(), part: FulltextPart::Description },
-                FulltextInstance { lang: "EN".to_string(), part: FulltextPart::Claims },
+                FulltextInstance {
+                    lang: "EN".to_string(),
+                    part: FulltextPart::Description
+                },
+                FulltextInstance {
+                    lang: "EN".to_string(),
+                    part: FulltextPart::Claims
+                },
             ]
         );
     }
 
     #[test]
     fn description_keeps_paragraph_numbers_and_normalises_whitespace() {
-        let (lang, text) =
-            parse_description(&fixture("ep1000000_a1_description.xml"), "en").unwrap().unwrap();
+        let (lang, text) = parse_description(&fixture("ep1000000_a1_description.xml"), "en")
+            .unwrap()
+            .unwrap();
         assert_eq!(lang, "EN");
         assert!(text.starts_with("[0001] The invention relates to an apparatus"));
         assert!(text.contains("[0022]"));
-        assert!(!text.contains("  "), "whitespace should be normalised to single spaces");
+        assert!(
+            !text.contains("  "),
+            "whitespace should be normalised to single spaces"
+        );
     }
 
     #[test]
     fn claims_keeps_claim_numbers_one_per_line() {
-        let (lang, text) = parse_claims(&fixture("ep1000000_a1_claims.xml"), "en").unwrap().unwrap();
+        let (lang, text) = parse_claims(&fixture("ep1000000_a1_claims.xml"), "en")
+            .unwrap()
+            .unwrap();
         assert_eq!(lang, "EN");
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 11);
@@ -196,8 +216,11 @@ mod tests {
     fn b1_claims_are_genuinely_trilingual_and_parsing_picks_out_english_only() {
         let xml = fixture("ep1000000_b1_claims_trilingual.xml");
         let doc = Document::parse(&xml).unwrap();
-        let langs: Vec<&str> =
-            doc.descendants().filter(|n| n.has_tag_name("claims")).filter_map(|n| n.attribute("lang")).collect();
+        let langs: Vec<&str> = doc
+            .descendants()
+            .filter(|n| n.has_tag_name("claims"))
+            .filter_map(|n| n.attribute("lang"))
+            .collect();
         assert_eq!(langs, vec!["DE", "FR", "EN"]);
 
         // SPEC 5.5: "for an EP B1, take the English claims" - the cascade
@@ -216,20 +239,29 @@ mod tests {
     #[test]
     fn german_description_parses_the_same_way_as_english() {
         let (lang, text) =
-            parse_description(&fixture("synthetic_ep_fr_de_only_description.xml"), "de").unwrap().unwrap();
+            parse_description(&fixture("synthetic_ep_fr_de_only_description.xml"), "de")
+                .unwrap()
+                .unwrap();
         assert_eq!(lang, "DE");
         assert!(text.starts_with("[0001] Die Erfindung betrifft"));
     }
 
     #[test]
     fn requesting_a_language_that_is_not_present_returns_none() {
-        assert_eq!(parse_description(&fixture("ep1000000_a1_description.xml"), "de").unwrap(), None);
-        assert_eq!(parse_claims(&fixture("ep1000000_a1_claims.xml"), "de").unwrap(), None);
+        assert_eq!(
+            parse_description(&fixture("ep1000000_a1_description.xml"), "de").unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_claims(&fixture("ep1000000_a1_claims.xml"), "de").unwrap(),
+            None
+        );
     }
 
     #[test]
     fn not_found_fault_has_no_fulltext_instances() {
-        let instances = parse_inquiry(&fixture("us5960411_fulltext_not_available_404.xml")).unwrap();
+        let instances =
+            parse_inquiry(&fixture("us5960411_fulltext_not_available_404.xml")).unwrap();
         assert!(instances.is_empty());
     }
 }

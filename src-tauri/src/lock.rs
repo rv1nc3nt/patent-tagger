@@ -21,13 +21,17 @@ impl PipelineLock {
     /// trade-off given how rarely that should happen in practice.
     pub fn acquire(data_dir: &Path) -> anyhow::Result<Self> {
         let path = data_dir.join(LOCK_FILE_NAME);
-        OpenOptions::new().write(true).create_new(true).open(&path).map_err(|e| {
-            anyhow::anyhow!(
-                "another import or retrieval pipeline appears to already be running \
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "another import or retrieval pipeline appears to already be running \
                  (lock file {path:?} already exists - delete it if a previous run crashed \
                  without cleaning up): {e}"
-            )
-        })?;
+                )
+            })?;
         Ok(Self { path })
     }
 }
@@ -46,10 +50,16 @@ mod tests {
     fn acquiring_twice_fails_until_the_first_is_dropped() {
         let dir = tempfile::tempdir().unwrap();
         let first = PipelineLock::acquire(dir.path()).expect("first acquire should succeed");
-        assert!(PipelineLock::acquire(dir.path()).is_err(), "a second acquire should fail while the first is held");
+        assert!(
+            PipelineLock::acquire(dir.path()).is_err(),
+            "a second acquire should fail while the first is held"
+        );
 
         drop(first);
-        assert!(PipelineLock::acquire(dir.path()).is_ok(), "acquiring again after the first is dropped should succeed");
+        assert!(
+            PipelineLock::acquire(dir.path()).is_ok(),
+            "acquiring again after the first is dropped should succeed"
+        );
     }
 
     #[test]

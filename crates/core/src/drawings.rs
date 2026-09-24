@@ -32,7 +32,10 @@ pub struct DrawingsStatusRow {
     pub updated_at: Option<String>,
 }
 
-pub fn get_status(conn: &Connection, doc_id: i64) -> Result<Option<DrawingsStatusRow>, StorageError> {
+pub fn get_status(
+    conn: &Connection,
+    doc_id: i64,
+) -> Result<Option<DrawingsStatusRow>, StorageError> {
     conn.query_row(
         "SELECT doc_id, status, page_count, source, updated_at FROM drawings_status WHERE doc_id = ?1",
         params![doc_id],
@@ -47,7 +50,9 @@ pub fn list_pages(conn: &Connection, doc_id: i64) -> Result<Vec<DrawingPage>, St
         "SELECT doc_id, page, source, path, width, height, fetched_at
          FROM drawings WHERE doc_id = ?1 ORDER BY page ASC",
     )?;
-    let rows = stmt.query_map(params![doc_id], row_to_page)?.collect::<Result<Vec<_>, _>>()?;
+    let rows = stmt
+        .query_map(params![doc_id], row_to_page)?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -79,10 +84,21 @@ pub fn store_fetched_status(
     source: &str,
     updated_at: &str,
 ) -> Result<(), StorageError> {
-    upsert_status(conn, doc_id, STATUS_FETCHED, Some(page_count), Some(source), updated_at)
+    upsert_status(
+        conn,
+        doc_id,
+        STATUS_FETCHED,
+        Some(page_count),
+        Some(source),
+        updated_at,
+    )
 }
 
-pub fn store_not_available(conn: &Connection, doc_id: i64, updated_at: &str) -> Result<(), StorageError> {
+pub fn store_not_available(
+    conn: &Connection,
+    doc_id: i64,
+    updated_at: &str,
+) -> Result<(), StorageError> {
     upsert_status(conn, doc_id, STATUS_NOT_AVAILABLE, None, None, updated_at)
 }
 
@@ -139,7 +155,9 @@ mod tests {
     const NOW: &str = "2026-01-01T00:00:00Z";
 
     fn new_doc(conn: &Connection) -> i64 {
-        documents::insert_pending(conn, "EP1234567", "EP1234567", NOW).unwrap().unwrap()
+        documents::insert_pending(conn, "EP1234567", "EP1234567", NOW)
+            .unwrap()
+            .unwrap()
     }
 
     #[test]
@@ -155,8 +173,28 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
         store_fetched_status(&conn, doc_id, 2, "EP.1234567.A1", NOW).unwrap();
-        insert_page(&conn, doc_id, 2, "EP.1234567.A1", "drawings/EP1234567/002.png", 3508, 2479, NOW).unwrap();
-        insert_page(&conn, doc_id, 1, "EP.1234567.A1", "drawings/EP1234567/001.png", 3508, 2479, NOW).unwrap();
+        insert_page(
+            &conn,
+            doc_id,
+            2,
+            "EP.1234567.A1",
+            "drawings/EP1234567/002.png",
+            3508,
+            2479,
+            NOW,
+        )
+        .unwrap();
+        insert_page(
+            &conn,
+            doc_id,
+            1,
+            "EP.1234567.A1",
+            "drawings/EP1234567/001.png",
+            3508,
+            2479,
+            NOW,
+        )
+        .unwrap();
 
         let status = get_status(&conn, doc_id).unwrap().unwrap();
         assert_eq!(status.status, STATUS_FETCHED);
@@ -164,7 +202,10 @@ mod tests {
 
         let pages = list_pages(&conn, doc_id).unwrap();
         assert_eq!(pages.len(), 2);
-        assert_eq!(pages[0].page, 1, "pages should come back in page order regardless of insert order");
+        assert_eq!(
+            pages[0].page, 1,
+            "pages should come back in page order regardless of insert order"
+        );
         assert_eq!(pages[1].page, 2);
     }
 
@@ -184,15 +225,38 @@ mod tests {
         let doc_id = new_doc(&conn);
         store_error(&conn, doc_id, NOW).unwrap();
         store_fetched_status(&conn, doc_id, 1, "EP.1234567.A1", NOW).unwrap();
-        assert_eq!(get_status(&conn, doc_id).unwrap().unwrap().status, STATUS_FETCHED);
+        assert_eq!(
+            get_status(&conn, doc_id).unwrap().unwrap().status,
+            STATUS_FETCHED
+        );
     }
 
     #[test]
     fn insert_page_upserts_on_the_same_page_number() {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
-        insert_page(&conn, doc_id, 1, "EP.1234567.A1", "drawings/EP1234567/001.png", 100, 100, NOW).unwrap();
-        insert_page(&conn, doc_id, 1, "EP.1234567.A1", "drawings/EP1234567/001.png", 3508, 2479, NOW).unwrap();
+        insert_page(
+            &conn,
+            doc_id,
+            1,
+            "EP.1234567.A1",
+            "drawings/EP1234567/001.png",
+            100,
+            100,
+            NOW,
+        )
+        .unwrap();
+        insert_page(
+            &conn,
+            doc_id,
+            1,
+            "EP.1234567.A1",
+            "drawings/EP1234567/001.png",
+            3508,
+            2479,
+            NOW,
+        )
+        .unwrap();
 
         let pages = list_pages(&conn, doc_id).unwrap();
         assert_eq!(pages.len(), 1);

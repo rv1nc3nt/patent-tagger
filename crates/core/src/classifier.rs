@@ -133,7 +133,11 @@ pub fn store(
     Ok(())
 }
 
-pub fn load(conn: &Connection, tag_id: i64, model_id: &str) -> Result<Option<Classifier>, StorageError> {
+pub fn load(
+    conn: &Connection,
+    tag_id: i64,
+    model_id: &str,
+) -> Result<Option<Classifier>, StorageError> {
     conn.query_row(
         "SELECT weights, bias, n_pos, n_neg, trained_at FROM classifiers WHERE tag_id = ?1 AND model_id = ?2",
         params![tag_id, model_id],
@@ -203,7 +207,14 @@ mod tests {
 
         let samples = clustered_samples(10);
         let classifier = train(&samples, default_l2_lambda()).unwrap();
-        store(&conn, tag_id, "model@abc", &classifier, "2026-01-01T00:00:00Z").unwrap();
+        store(
+            &conn,
+            tag_id,
+            "model@abc",
+            &classifier,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
 
         let loaded = load(&conn, tag_id, "model@abc").unwrap().unwrap();
         assert_eq!(loaded.weights, classifier.weights);

@@ -9,7 +9,11 @@ pub fn format_unix_timestamp(secs_since_epoch: u64) -> String {
     let days = secs_since_epoch / 86_400;
     let time_of_day = secs_since_epoch % 86_400;
     let (year, month, day) = civil_from_days(days as i64);
-    let (hour, minute, second) = (time_of_day / 3600, (time_of_day / 60) % 60, time_of_day % 60);
+    let (hour, minute, second) = (
+        time_of_day / 3600,
+        (time_of_day / 60) % 60,
+        time_of_day % 60,
+    );
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 

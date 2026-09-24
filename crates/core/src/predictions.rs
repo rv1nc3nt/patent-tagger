@@ -17,7 +17,14 @@ pub fn record(
     conn.execute(
         "INSERT INTO predictions (doc_id, tag_id, model_version, score, suggested, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![doc_id, tag_id, model_version, score, suggested as i64, created_at],
+        params![
+            doc_id,
+            tag_id,
+            model_version,
+            score,
+            suggested as i64,
+            created_at
+        ],
     )?;
     Ok(())
 }
@@ -54,7 +61,10 @@ struct ScoredLabel {
     is_pos: bool,
 }
 
-fn windowed_scored_labels(conn: &Connection, tag_id: i64) -> Result<Vec<ScoredLabel>, StorageError> {
+fn windowed_scored_labels(
+    conn: &Connection,
+    tag_id: i64,
+) -> Result<Vec<ScoredLabel>, StorageError> {
     let mut stmt = conn.prepare(
         "SELECT p.score, l.state FROM predictions p
          JOIN labels l ON l.doc_id = p.doc_id AND l.tag_id = p.tag_id AND l.source = 'human'
@@ -88,8 +98,16 @@ fn precision_recall_at(items: &[ScoredLabel], threshold: f32) -> (Option<f32>, O
             (false, false) => {}
         }
     }
-    let precision = if tp + fp > 0 { Some(tp as f32 / (tp + fp) as f32) } else { None };
-    let recall = if tp + fn_ > 0 { Some(tp as f32 / (tp + fn_) as f32) } else { None };
+    let precision = if tp + fp > 0 {
+        Some(tp as f32 / (tp + fp) as f32)
+    } else {
+        None
+    };
+    let recall = if tp + fn_ > 0 {
+        Some(tp as f32 / (tp + fn_) as f32)
+    } else {
+        None
+    };
     (precision, recall)
 }
 
@@ -103,7 +121,9 @@ pub const MIN_EVALUATED_FOR_AUTO: i64 = 150;
 /// on the window, or `None` if no threshold does (SPEC 7.5).
 fn calibrate_from_items(items: &[ScoredLabel], target_precision: f32) -> Option<f32> {
     (0..=100).map(|step| step as f32 * 0.01).find(|&threshold| {
-        precision_recall_at(items, threshold).0.is_some_and(|p| p >= target_precision)
+        precision_recall_at(items, threshold)
+            .0
+            .is_some_and(|p| p >= target_precision)
     })
 }
 
@@ -128,7 +148,11 @@ fn calibrate_neg_threshold_from_items(items: &[ScoredLabel], target_recall: f32)
     (0..=100)
         .rev()
         .map(|step| step as f32 * 0.01)
-        .find(|&threshold| precision_recall_at(items, threshold).1.is_some_and(|r| r >= target_recall))
+        .find(|&threshold| {
+            precision_recall_at(items, threshold)
+                .1
+                .is_some_and(|r| r >= target_recall)
+        })
 }
 
 pub fn calibrate_neg_threshold(
@@ -157,9 +181,15 @@ pub fn tag_eligibility(
     let n_evaluated = items.len() as i64;
     let n_pos = items.iter().filter(|i| i.is_pos).count() as i64;
     let calibrated_threshold = calibrate_from_items(&items, target_precision);
-    let eligible =
-        n_pos >= MIN_POSITIVES_FOR_AUTO && n_evaluated >= MIN_EVALUATED_FOR_AUTO && calibrated_threshold.is_some();
-    Ok(Eligibility { eligible, n_pos, n_evaluated, calibrated_threshold })
+    let eligible = n_pos >= MIN_POSITIVES_FOR_AUTO
+        && n_evaluated >= MIN_EVALUATED_FOR_AUTO
+        && calibrated_threshold.is_some();
+    Ok(Eligibility {
+        eligible,
+        n_pos,
+        n_evaluated,
+        calibrated_threshold,
+    })
 }
 
 pub fn tag_metrics(conn: &Connection, tag_id: i64) -> Result<TagMetrics, StorageError> {
@@ -174,7 +204,11 @@ pub fn tag_metrics(conn: &Connection, tag_id: i64) -> Result<TagMetrics, Storage
     while step <= 20 {
         let threshold = step as f32 * 0.05;
         let (p, r) = precision_recall_at(&items, threshold);
-        pr_curve.push(PrPoint { threshold, precision: p, recall: r });
+        pr_curve.push(PrPoint {
+            threshold,
+            precision: p,
+            recall: r,
+        });
         step += 1;
     }
 
@@ -205,8 +239,21 @@ mod tests {
     ) -> i64 {
         documents::insert_pending(conn, pub_key, pub_key, NOW).unwrap();
         let doc = documents::find_by_pub_key(conn, pub_key).unwrap().unwrap();
-        record(conn, doc.id, tag.id, "model@v1", score, score >= DEFAULT_THRESHOLD, NOW).unwrap();
-        let checked: HashSet<i64> = if is_pos { [tag.id].into_iter().collect() } else { HashSet::new() };
+        record(
+            conn,
+            doc.id,
+            tag.id,
+            "model@v1",
+            score,
+            score >= DEFAULT_THRESHOLD,
+            NOW,
+        )
+        .unwrap();
+        let checked: HashSet<i64> = if is_pos {
+            [tag.id].into_iter().collect()
+        } else {
+            HashSet::new()
+        };
         labels::validate_document(conn, doc.id, std::slice::from_ref(tag), &checked, NOW).unwrap();
         doc.id
     }
@@ -258,7 +305,10 @@ mod tests {
         validated_doc_with_prediction(&conn, "EP0000001", &tag, 0.1, false);
 
         let metrics = tag_metrics(&conn, tag_id).unwrap();
-        assert_eq!(metrics.precision, None, "no positive predictions means precision is undefined");
+        assert_eq!(
+            metrics.precision, None,
+            "no positive predictions means precision is undefined"
+        );
     }
 
     #[test]
@@ -291,9 +341,13 @@ mod tests {
         validated_doc_with_prediction(&conn, "EPFP0200", &tag, 0.2, false);
 
         let threshold = calibrate_threshold(&conn, tag_id, 0.9).unwrap().unwrap();
-        assert!((threshold - 0.21).abs() < 1e-6, "expected 0.21, got {threshold}");
+        assert!(
+            (threshold - 0.21).abs() < 1e-6,
+            "expected 0.21, got {threshold}"
+        );
 
-        let (precision, _) = precision_recall_at(&windowed_scored_labels(&conn, tag_id).unwrap(), threshold);
+        let (precision, _) =
+            precision_recall_at(&windowed_scored_labels(&conn, tag_id).unwrap(), threshold);
         assert_eq!(precision, Some(0.9));
     }
 
@@ -332,10 +386,18 @@ mod tests {
             validated_doc_with_prediction(&conn, &format!("EPNEG{i:04}"), &tag, 0.05, false);
         }
 
-        let neg_threshold = calibrate_neg_threshold(&conn, tag_id, 0.95).unwrap().unwrap();
-        assert!((neg_threshold - 0.15).abs() < 1e-6, "expected 0.15, got {neg_threshold}");
+        let neg_threshold = calibrate_neg_threshold(&conn, tag_id, 0.95)
+            .unwrap()
+            .unwrap();
+        assert!(
+            (neg_threshold - 0.15).abs() < 1e-6,
+            "expected 0.15, got {neg_threshold}"
+        );
 
-        let (_, recall) = precision_recall_at(&windowed_scored_labels(&conn, tag_id).unwrap(), neg_threshold);
+        let (_, recall) = precision_recall_at(
+            &windowed_scored_labels(&conn, tag_id).unwrap(),
+            neg_threshold,
+        );
         assert_eq!(recall, Some(1.0));
     }
 

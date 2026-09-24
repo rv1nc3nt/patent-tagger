@@ -62,7 +62,10 @@ pub fn run(repo_root: &Path) -> anyhow::Result<()> {
     eprintln!("Converting model.safetensors to f16...");
     let f16_bytes = convert_to_f16(&downloaded["model.safetensors"])?;
     std::fs::write(out_dir.join("model_f16.safetensors"), &f16_bytes)?;
-    std::fs::write(out_dir.join("tokenizer.json"), &downloaded["tokenizer.json"])?;
+    std::fs::write(
+        out_dir.join("tokenizer.json"),
+        &downloaded["tokenizer.json"],
+    )?;
     std::fs::write(out_dir.join("config.json"), &downloaded["config.json"])?;
 
     eprintln!(

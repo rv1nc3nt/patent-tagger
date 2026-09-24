@@ -41,7 +41,9 @@ pub struct TagSchema {
 }
 
 pub fn export_schema(conn: &Connection) -> Result<Vec<TagSchema>, StorageError> {
-    let mut stmt = conn.prepare("SELECT name, definition, color, hotkey FROM tags WHERE archived = 0 ORDER BY name ASC")?;
+    let mut stmt = conn.prepare(
+        "SELECT name, definition, color, hotkey FROM tags WHERE archived = 0 ORDER BY name ASC",
+    )?;
     let rows = stmt
         .query_map([], |row| {
             Ok(TagSchema {
@@ -88,9 +90,12 @@ const SELECT_COLUMNS: &str =
     "id, name, definition, color, hotkey, version, archived, threshold, neg_threshold, auto_enabled";
 
 pub fn list_active(conn: &Connection) -> Result<Vec<TagRow>, StorageError> {
-    let mut stmt =
-        conn.prepare(&format!("SELECT {SELECT_COLUMNS} FROM tags WHERE archived = 0 ORDER BY name ASC"))?;
-    let rows = stmt.query_map([], row_to_tag)?.collect::<Result<Vec<_>, _>>()?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLUMNS} FROM tags WHERE archived = 0 ORDER BY name ASC"
+    ))?;
+    let rows = stmt
+        .query_map([], row_to_tag)?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -109,13 +114,27 @@ pub fn archive(conn: &Connection, id: i64) -> Result<(), StorageError> {
     Ok(())
 }
 
-pub fn set_threshold(conn: &Connection, tag_id: i64, threshold: Option<f32>) -> Result<(), StorageError> {
-    conn.execute("UPDATE tags SET threshold = ?1 WHERE id = ?2", params![threshold, tag_id])?;
+pub fn set_threshold(
+    conn: &Connection,
+    tag_id: i64,
+    threshold: Option<f32>,
+) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE tags SET threshold = ?1 WHERE id = ?2",
+        params![threshold, tag_id],
+    )?;
     Ok(())
 }
 
-pub fn set_neg_threshold(conn: &Connection, tag_id: i64, neg_threshold: Option<f32>) -> Result<(), StorageError> {
-    conn.execute("UPDATE tags SET neg_threshold = ?1 WHERE id = ?2", params![neg_threshold, tag_id])?;
+pub fn set_neg_threshold(
+    conn: &Connection,
+    tag_id: i64,
+    neg_threshold: Option<f32>,
+) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE tags SET neg_threshold = ?1 WHERE id = ?2",
+        params![neg_threshold, tag_id],
+    )?;
     Ok(())
 }
 
@@ -166,7 +185,15 @@ mod tests {
     #[test]
     fn create_and_list_active() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        create(&conn, "Battery", "Relates to batteries", Some("#f00"), Some("b"), NOW).unwrap();
+        create(
+            &conn,
+            "Battery",
+            "Relates to batteries",
+            Some("#f00"),
+            Some("b"),
+            NOW,
+        )
+        .unwrap();
         let tags = list_active(&conn).unwrap();
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].name, "Battery");
@@ -232,7 +259,15 @@ mod tests {
     #[test]
     fn export_schema_excludes_archived_tags_and_learned_state() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let battery_id = create(&conn, "Battery", "Relates to batteries", Some("#f00"), Some("b"), NOW).unwrap();
+        let battery_id = create(
+            &conn,
+            "Battery",
+            "Relates to batteries",
+            Some("#f00"),
+            Some("b"),
+            NOW,
+        )
+        .unwrap();
         set_threshold(&conn, battery_id, Some(0.8)).unwrap();
         let archived_id = create(&conn, "Old", "No longer used", None, None, NOW).unwrap();
         archive(&conn, archived_id).unwrap();

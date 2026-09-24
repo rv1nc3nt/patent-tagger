@@ -170,8 +170,15 @@ pub fn create_tag(
 ) -> Result<TagRow, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = current_timestamp();
-    let id = tags::create(&conn, &name, &definition, color.as_deref(), hotkey.as_deref(), &now)
-        .map_err(|e| e.to_string())?;
+    let id = tags::create(
+        &conn,
+        &name,
+        &definition,
+        color.as_deref(),
+        hotkey.as_deref(),
+        &now,
+    )
+    .map_err(|e| e.to_string())?;
 
     let text = format!("{name}: {definition}");
     let vector = model
@@ -198,11 +205,16 @@ pub fn archive_tag(state: State<Db>, tag_id: i64) -> Result<(), String> {
 /// unless the tag currently meets the eligibility bar, in which case its
 /// threshold is set to the just-calibrated value and auto mode turns on.
 #[tauri::command]
-pub fn enable_automatic_mode(state: State<Db>, model: State<Model>, tag_id: i64) -> Result<TagRow, String> {
+pub fn enable_automatic_mode(
+    state: State<Db>,
+    model: State<Model>,
+    tag_id: i64,
+) -> Result<TagRow, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
-    let eligibility =
-        core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision).map_err(|e| e.to_string())?;
+    let target_precision =
+        core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    let eligibility = core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision)
+        .map_err(|e| e.to_string())?;
     if !eligibility.eligible {
         return Err(format!(
             "tag {tag_id} is not yet eligible for automatic mode (n_pos={}, n_evaluated={}, target precision {} {})",
@@ -212,7 +224,8 @@ pub fn enable_automatic_mode(state: State<Db>, model: State<Model>, tag_id: i64)
             if eligibility.calibrated_threshold.is_some() { "reachable" } else { "not reachable" },
         ));
     }
-    tags::set_threshold(&conn, tag_id, eligibility.calibrated_threshold).map_err(|e| e.to_string())?;
+    tags::set_threshold(&conn, tag_id, eligibility.calibrated_threshold)
+        .map_err(|e| e.to_string())?;
     tags::set_auto_enabled(&conn, tag_id, true).map_err(|e| e.to_string())?;
 
     crate::automation::apply_full_automation(&conn, &model.0, &current_timestamp())
@@ -230,10 +243,15 @@ pub fn disable_automatic_mode(state: State<Db>, tag_id: i64) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub fn tag_eligibility(state: State<Db>, tag_id: i64) -> Result<core_lib::predictions::Eligibility, String> {
+pub fn tag_eligibility(
+    state: State<Db>,
+    tag_id: i64,
+) -> Result<core_lib::predictions::Eligibility, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
-    core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision).map_err(|e| e.to_string())
+    let target_precision =
+        core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    core_lib::predictions::tag_eligibility(&conn, tag_id, target_precision)
+        .map_err(|e| e.to_string())
 }
 
 /// `ordering`: `"import"` (default, `documents::list_queue`'s own order)
@@ -246,7 +264,9 @@ pub fn review_queue(
 ) -> Result<Vec<documents::QueueEntry>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     match ordering.as_deref() {
-        Some("uncertain") => crate::review::queue_ordered_by_uncertainty(&conn, &model.0).map_err(|e| e.to_string()),
+        Some("uncertain") => {
+            crate::review::queue_ordered_by_uncertainty(&conn, &model.0).map_err(|e| e.to_string())
+        }
         _ => documents::list_queue(&conn).map_err(|e| e.to_string()),
     }
 }
@@ -290,9 +310,11 @@ pub fn validate_document(
     // Tags with an existing automatic decision on this document - once the
     // human's decision lands in label_history right below it, these are
     // the ones that just became "audited" (SPEC 7.5).
-    let previously_auto = labels::auto_labelled_tag_ids(&conn, doc_id).map_err(|e| e.to_string())?;
+    let previously_auto =
+        labels::auto_labelled_tag_ids(&conn, doc_id).map_err(|e| e.to_string())?;
 
-    let scores = crate::review::score_document(&conn, &model.0, &active_tags, doc_id).map_err(|e| e.to_string())?;
+    let scores = crate::review::score_document(&conn, &model.0, &active_tags, doc_id)
+        .map_err(|e| e.to_string())?;
     for tag_score in &scores {
         if let Some(score) = tag_score.score {
             core_lib::predictions::record(
@@ -309,18 +331,21 @@ pub fn validate_document(
     }
 
     let checked: HashSet<i64> = checked_tag_ids.into_iter().collect();
-    labels::validate_document(&conn, doc_id, &active_tags, &checked, &now).map_err(|e| e.to_string())?;
+    labels::validate_document(&conn, doc_id, &active_tags, &checked, &now)
+        .map_err(|e| e.to_string())?;
     enqueue_retrieval_after_tagging(&conn, doc_id, &checked, &now).map_err(|e| e.to_string())?;
 
-    let target_precision = core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
+    let target_precision =
+        core_lib::settings::target_precision(&conn).map_err(|e| e.to_string())?;
     let target_recall = core_lib::settings::target_recall(&conn).map_err(|e| e.to_string())?;
     let mut auto_disabled_tags = Vec::new();
     for tag in &active_tags {
         if !previously_auto.contains(&tag.id) {
             continue;
         }
-        let disabled = crate::automation::check_and_disable_if_below_target(&conn, tag.id, target_precision)
-            .map_err(|e| e.to_string())?;
+        let disabled =
+            crate::automation::check_and_disable_if_below_target(&conn, tag.id, target_precision)
+                .map_err(|e| e.to_string())?;
         // Suspension (SPEC 7.6) only matters for a tag the first check
         // didn't already disable - both flip the same `auto_enabled` flag.
         let suspended = !disabled
@@ -338,7 +363,8 @@ pub fn validate_document(
 
     if crate::retrain::is_scheduled_retrain_point(&conn).map_err(|e| e.to_string())? {
         crate::retrain::retrain_eligible_tags(&conn, &model.0, &now).map_err(|e| e.to_string())?;
-        crate::automation::apply_full_automation(&conn, &model.0, &now).map_err(|e| e.to_string())?;
+        crate::automation::apply_full_automation(&conn, &model.0, &now)
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(ValidateResult { auto_disabled_tags })
@@ -365,17 +391,25 @@ pub(crate) fn enqueue_retrieval_after_tagging(
     let fulltext_already_done = core_lib::fulltext::get(conn, doc_id)?
         .is_some_and(|f| matches!(f.status.as_str(), "fetched" | "non_english_only"));
     if !fulltext_already_done
-        && should_retrieve_after_tagging(&fulltext_policy, &fulltext_policy_tag_ids, &document_tag_ids)
+        && should_retrieve_after_tagging(
+            &fulltext_policy,
+            &fulltext_policy_tag_ids,
+            &document_tag_ids,
+        )
     {
         crate::retrieval_worker::enqueue_fulltext(conn, doc_id, now)?;
     }
 
     let drawings_policy = core_lib::settings::drawings_policy(conn)?;
     let drawings_policy_tag_ids = core_lib::settings::drawings_policy_tag_ids(conn)?;
-    let drawings_already_done = core_lib::drawings::get_status(conn, doc_id)?
-        .is_some_and(|d| d.status == "fetched");
+    let drawings_already_done =
+        core_lib::drawings::get_status(conn, doc_id)?.is_some_and(|d| d.status == "fetched");
     if !drawings_already_done
-        && should_retrieve_after_tagging(&drawings_policy, &drawings_policy_tag_ids, &document_tag_ids)
+        && should_retrieve_after_tagging(
+            &drawings_policy,
+            &drawings_policy_tag_ids,
+            &document_tag_ids,
+        )
     {
         crate::retrieval_worker::enqueue_drawings(conn, doc_id, now)?;
     }
@@ -437,7 +471,8 @@ pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<
 #[tauri::command]
 pub fn read_drawing_page(state: State<Db>, doc_id: i64, page: i64) -> Result<Vec<u8>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    crate::review::read_drawing_page(&conn, &state.data_dir, doc_id, page).map_err(|e| e.to_string())
+    crate::review::read_drawing_page(&conn, &state.data_dir, doc_id, page)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -451,7 +486,8 @@ pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
 #[tauri::command]
 pub fn retrain_now(state: State<Db>, model: State<Model>) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    crate::retrain::retrain_eligible_tags(&conn, &model.0, &current_timestamp()).map_err(|e| e.to_string())
+    crate::retrain::retrain_eligible_tags(&conn, &model.0, &current_timestamp())
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -476,7 +512,8 @@ pub fn tag_metrics(state: State<Db>) -> Result<Vec<TagMetricsRow>, String> {
         .map_err(|e| e.to_string())?
         .into_iter()
         .map(|tag| {
-            let metrics = core_lib::predictions::tag_metrics(&conn, tag.id).map_err(|e| e.to_string())?;
+            let metrics =
+                core_lib::predictions::tag_metrics(&conn, tag.id).map_err(|e| e.to_string())?;
             let (audited_precision, audited_n) =
                 core_lib::audit::audited_precision(&conn, tag.id).map_err(|e| e.to_string())?;
             let (full_automation_precision, full_automation_recall, full_automation_n) =
@@ -508,8 +545,10 @@ pub struct FullAutomationSummaryView {
 #[tauri::command]
 pub fn full_automation_summary(state: State<Db>) -> Result<FullAutomationSummaryView, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let readiness = core_lib::full_automation::auto_completion_readiness(&conn).map_err(|e| e.to_string())?;
-    let counts = core_lib::full_automation::automation_state_counts(&conn).map_err(|e| e.to_string())?;
+    let readiness =
+        core_lib::full_automation::auto_completion_readiness(&conn).map_err(|e| e.to_string())?;
+    let counts =
+        core_lib::full_automation::automation_state_counts(&conn).map_err(|e| e.to_string())?;
     Ok(FullAutomationSummaryView { readiness, counts })
 }
 

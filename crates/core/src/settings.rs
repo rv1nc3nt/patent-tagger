@@ -5,9 +5,13 @@ use crate::storage::StorageError;
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn get(conn: &Connection, key: &str) -> Result<Option<String>, StorageError> {
-    conn.query_row("SELECT value FROM settings WHERE key = ?1", params![key], |row| row.get(0))
-        .optional()
-        .map_err(StorageError::from)
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(StorageError::from)
 }
 
 pub fn set(conn: &Connection, key: &str, value: &str) -> Result<(), StorageError> {
@@ -20,7 +24,9 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> Result<(), StorageError
 }
 
 fn get_f32(conn: &Connection, key: &str, default: f32) -> Result<f32, StorageError> {
-    Ok(get(conn, key)?.and_then(|s| s.parse().ok()).unwrap_or(default))
+    Ok(get(conn, key)?
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default))
 }
 
 fn get_bool(conn: &Connection, key: &str, default: bool) -> Result<bool, StorageError> {
@@ -94,11 +100,17 @@ pub const DRAWINGS_POLICY_TAG_IDS_KEY: &str = "drawings_policy_tag_ids";
 /// The tag ids consulted by the `after_tagging_selected_tags` policy
 /// (SPEC 5.5). Stored as JSON since `settings` is a plain key-value table.
 fn get_tag_ids(conn: &Connection, key: &str) -> Result<Vec<i64>, StorageError> {
-    Ok(get(conn, key)?.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default())
+    Ok(get(conn, key)?
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default())
 }
 
 fn set_tag_ids(conn: &Connection, key: &str, tag_ids: &[i64]) -> Result<(), StorageError> {
-    set(conn, key, &serde_json::to_string(tag_ids).unwrap_or_default())
+    set(
+        conn,
+        key,
+        &serde_json::to_string(tag_ids).unwrap_or_default(),
+    )
 }
 
 pub fn fulltext_policy_tag_ids(conn: &Connection) -> Result<Vec<i64>, StorageError> {
@@ -174,6 +186,10 @@ mod tests {
 
         set_drawings_policy_tag_ids(&conn, &[4]).unwrap();
         assert_eq!(drawings_policy_tag_ids(&conn).unwrap(), vec![4]);
-        assert_eq!(fulltext_policy_tag_ids(&conn).unwrap(), vec![1, 2, 3], "the two policies' tag lists are independent");
+        assert_eq!(
+            fulltext_policy_tag_ids(&conn).unwrap(),
+            vec![1, 2, 3],
+            "the two policies' tag lists are independent"
+        );
     }
 }

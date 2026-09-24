@@ -77,7 +77,16 @@ pub fn write_automatic_label(
     tag_version: i64,
     now: &str,
 ) -> Result<bool, StorageError> {
-    write_automatic(conn, doc_id, tag_id, LabelState::Pos, confidence, model_version, tag_version, now)
+    write_automatic(
+        conn,
+        doc_id,
+        tag_id,
+        LabelState::Pos,
+        confidence,
+        model_version,
+        tag_version,
+        now,
+    )
 }
 
 /// Writes an automatic `neg` label (SPEC 7.6: "confident absence" - a
@@ -95,7 +104,16 @@ pub fn write_automatic_neg_label(
     tag_version: i64,
     now: &str,
 ) -> Result<bool, StorageError> {
-    write_automatic(conn, doc_id, tag_id, LabelState::Neg, confidence, model_version, tag_version, now)
+    write_automatic(
+        conn,
+        doc_id,
+        tag_id,
+        LabelState::Neg,
+        confidence,
+        model_version,
+        tag_version,
+        now,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -144,9 +162,8 @@ pub fn human_labels_for_tag(
     conn: &Connection,
     tag_id: i64,
 ) -> Result<HashMap<i64, LabelState>, StorageError> {
-    let mut stmt = conn.prepare(
-        "SELECT doc_id, state FROM labels WHERE tag_id = ?1 AND source = 'human'",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT doc_id, state FROM labels WHERE tag_id = ?1 AND source = 'human'")?;
     let rows = stmt
         .query_map(params![tag_id], |row| {
             let doc_id: i64 = row.get(0)?;
@@ -157,7 +174,11 @@ pub fn human_labels_for_tag(
     Ok(rows
         .into_iter()
         .map(|(doc_id, state)| {
-            let state = if state == "pos" { LabelState::Pos } else { LabelState::Neg };
+            let state = if state == "pos" {
+                LabelState::Pos
+            } else {
+                LabelState::Neg
+            };
             (doc_id, state)
         })
         .collect())
@@ -207,7 +228,11 @@ pub fn get_label(
             let confidence: Option<f64> = row.get(1)?;
             let model_version: Option<String> = row.get(2)?;
             Ok((
-                if state == "pos" { LabelState::Pos } else { LabelState::Neg },
+                if state == "pos" {
+                    LabelState::Pos
+                } else {
+                    LabelState::Neg
+                },
                 confidence.map(|c| c as f32),
                 model_version,
             ))
@@ -221,7 +246,8 @@ pub fn get_label(
 /// right before `validate_document` overwrites them, to know which tags
 /// this validation is about to audit (SPEC 7.5).
 pub fn auto_labelled_tag_ids(conn: &Connection, doc_id: i64) -> Result<HashSet<i64>, StorageError> {
-    let mut stmt = conn.prepare("SELECT tag_id FROM labels WHERE doc_id = ?1 AND source = 'auto'")?;
+    let mut stmt =
+        conn.prepare("SELECT tag_id FROM labels WHERE doc_id = ?1 AND source = 'auto'")?;
     let rows = stmt
         .query_map(params![doc_id], |row| row.get::<_, i64>(0))?
         .collect::<Result<HashSet<_>, _>>()?;
@@ -248,7 +274,9 @@ mod tests {
 
     fn setup(conn: &Connection) -> (i64, TagRow, TagRow) {
         documents::insert_pending(conn, "EP1234567", "EP1234567", NOW).unwrap();
-        let doc = documents::find_by_pub_key(conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(conn, "EP1234567")
+            .unwrap()
+            .unwrap();
         let battery_id = tags::create(conn, "Battery", "About batteries", None, None, NOW).unwrap();
         let solar_id = tags::create(conn, "Solar", "About solar power", None, None, NOW).unwrap();
         (
@@ -263,7 +291,14 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         let (doc_id, battery, solar) = setup(&conn);
         let checked: HashSet<i64> = [battery.id].into_iter().collect();
-        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &checked, NOW).unwrap();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &checked,
+            NOW,
+        )
+        .unwrap();
 
         let battery_labels = human_labels_for_tag(&conn, battery.id).unwrap();
         assert_eq!(battery_labels.get(&doc_id), Some(&LabelState::Pos));
@@ -283,7 +318,10 @@ mod tests {
 
         let auto_tags = auto_labelled_tag_ids(&conn, doc_id).unwrap();
         assert!(auto_tags.contains(&battery.id));
-        assert!(!auto_tags.contains(&solar.id), "solar was labelled by a human, not automatically");
+        assert!(
+            !auto_tags.contains(&solar.id),
+            "solar was labelled by a human, not automatically"
+        );
     }
 
     #[test]
@@ -296,8 +334,14 @@ mod tests {
         validate_document(&conn, doc_id, std::slice::from_ref(&solar), &checked, NOW).unwrap();
 
         let positives = all_positive_tag_ids(&conn, doc_id).unwrap();
-        assert!(positives.contains(&battery.id), "the automatic label should be included");
-        assert!(positives.contains(&solar.id), "the human label should be included");
+        assert!(
+            positives.contains(&battery.id),
+            "the automatic label should be included"
+        );
+        assert!(
+            positives.contains(&solar.id),
+            "the human label should be included"
+        );
     }
 
     #[test]
@@ -306,13 +350,22 @@ mod tests {
         let (doc_id, battery, solar) = setup(&conn);
         let checked: HashSet<i64> = [battery.id].into_iter().collect();
 
-        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &checked, NOW).unwrap();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &checked,
+            NOW,
+        )
+        .unwrap();
 
         let positives = positive_tag_ids(&conn, doc_id).unwrap();
         assert!(positives.contains(&battery.id));
         assert!(!positives.contains(&solar.id));
 
-        let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP1234567")
+            .unwrap()
+            .unwrap();
         assert_eq!(doc.review_state, "validated");
     }
 
@@ -322,26 +375,52 @@ mod tests {
         let (doc_id, battery, solar) = setup(&conn);
 
         let first_checked: HashSet<i64> = [battery.id].into_iter().collect();
-        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &first_checked, NOW).unwrap();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &first_checked,
+            NOW,
+        )
+        .unwrap();
 
         let second_checked: HashSet<i64> = [solar.id].into_iter().collect();
-        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &second_checked, NOW).unwrap();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &second_checked,
+            NOW,
+        )
+        .unwrap();
 
         let positives = positive_tag_ids(&conn, doc_id).unwrap();
         assert!(!positives.contains(&battery.id));
         assert!(positives.contains(&solar.id));
 
         let count: i64 = conn
-            .query_row("SELECT count(*) FROM labels WHERE doc_id = ?1", params![doc_id], |r| r.get(0))
+            .query_row(
+                "SELECT count(*) FROM labels WHERE doc_id = ?1",
+                params![doc_id],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(count, 2, "labels should be updated in place, not duplicated");
+        assert_eq!(
+            count, 2,
+            "labels should be updated in place, not duplicated"
+        );
 
         let history_count: i64 = conn
-            .query_row("SELECT count(*) FROM label_history WHERE doc_id = ?1", params![doc_id], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT count(*) FROM label_history WHERE doc_id = ?1",
+                params![doc_id],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(history_count, 4, "label_history is append-only across both validations");
+        assert_eq!(
+            history_count, 4,
+            "label_history is append-only across both validations"
+        );
     }
 
     #[test]
@@ -351,7 +430,9 @@ mod tests {
 
         skip_document(&conn, doc_id).unwrap();
 
-        let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP1234567")
+            .unwrap()
+            .unwrap();
         assert_eq!(doc.review_state, "skipped");
         assert!(positive_tag_ids(&conn, doc_id).unwrap().is_empty());
     }
@@ -385,7 +466,8 @@ mod tests {
         assert_eq!(get_label(&conn, doc_id, battery.id).unwrap(), None);
 
         write_automatic_label(&conn, doc_id, battery.id, 0.87, "model@v1", 1, NOW).unwrap();
-        let (state, confidence, model_version) = get_label(&conn, doc_id, battery.id).unwrap().unwrap();
+        let (state, confidence, model_version) =
+            get_label(&conn, doc_id, battery.id).unwrap().unwrap();
         assert_eq!(state, LabelState::Pos);
         assert!((confidence.unwrap() - 0.87).abs() < 1e-6);
         assert_eq!(model_version.as_deref(), Some("model@v1"));
@@ -418,10 +500,21 @@ mod tests {
 
         // Human explicitly said "no" to battery.
         let checked: HashSet<i64> = [solar.id].into_iter().collect();
-        validate_document(&conn, doc_id, &[battery.clone(), solar.clone()], &checked, NOW).unwrap();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &checked,
+            NOW,
+        )
+        .unwrap();
 
-        let changed = write_automatic_label(&conn, doc_id, battery.id, 0.99, "model@v1", 1, NOW).unwrap();
-        assert!(!changed, "an automatic label must never overwrite a human decision");
+        let changed =
+            write_automatic_label(&conn, doc_id, battery.id, 0.99, "model@v1", 1, NOW).unwrap();
+        assert!(
+            !changed,
+            "an automatic label must never overwrite a human decision"
+        );
 
         let state: String = conn
             .query_row(

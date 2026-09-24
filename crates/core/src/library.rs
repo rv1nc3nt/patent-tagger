@@ -51,7 +51,10 @@ pub struct LibraryRow {
 /// filtering happens afterward, in Rust, rather than as dynamic `EXISTS`
 /// subqueries per tag - simpler at the personal-library scale this app
 /// targets, and sidesteps building a variable-length `IN (...)` list.
-pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<LibraryRow>, StorageError> {
+pub fn search(
+    conn: &Connection,
+    filters: &LibraryFilters,
+) -> Result<Vec<LibraryRow>, StorageError> {
     let mut sql = String::from(
         "SELECT DISTINCT d.id, d.pub_key, d.title, d.review_state,
                 EXISTS (SELECT 1 FROM drawings_status ds3 WHERE ds3.doc_id = d.id AND ds3.status = 'fetched')
@@ -68,7 +71,11 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
         conditions.push(format!("documents_fts MATCH ?{}", bind_values.len()));
     }
     if let Some(source) = &filters.label_source {
-        bind_values.push(if source == "auto" { "auto".to_string() } else { "human".to_string() });
+        bind_values.push(if source == "auto" {
+            "auto".to_string()
+        } else {
+            "human".to_string()
+        });
         conditions.push(format!(
             "EXISTS (SELECT 1 FROM labels l WHERE l.doc_id = d.id AND l.source = ?{})",
             bind_values.len()
@@ -103,7 +110,13 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
     let mut stmt = conn.prepare(&sql)?;
     let mut rows: Vec<(i64, String, Option<String>, String, bool)> = stmt
         .query_map(rusqlite::params_from_iter(bind_values.iter()), |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -120,17 +133,32 @@ pub fn search(conn: &Connection, filters: &LibraryFilters) -> Result<Vec<Library
             .query_map(params![id], |row| row.get::<_, i64>(0))?
             .collect::<Result<_, _>>()?;
 
-        if !filters.include_tag_ids.iter().all(|t| pos_tag_ids.contains(t)) {
+        if !filters
+            .include_tag_ids
+            .iter()
+            .all(|t| pos_tag_ids.contains(t))
+        {
             continue;
         }
-        if filters.exclude_tag_ids.iter().any(|t| pos_tag_ids.contains(t)) {
+        if filters
+            .exclude_tag_ids
+            .iter()
+            .any(|t| pos_tag_ids.contains(t))
+        {
             continue;
         }
 
         let tags = tag_stmt
             .query_map(params![id], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
-        result.push(LibraryRow { id, pub_key, title, review_state, tags, has_drawings });
+        result.push(LibraryRow {
+            id,
+            pub_key,
+            title,
+            review_state,
+            tags,
+            has_drawings,
+        });
     }
     Ok(result)
 }
@@ -175,7 +203,12 @@ pub fn similar_to(
                 .map(|c| f32::from_le_bytes(c.try_into().expect("chunks_exact(4)")))
                 .collect();
             let similarity = crate::scoring::cosine_similarity(&target, &vector);
-            SimilarDocument { id, pub_key, title, similarity }
+            SimilarDocument {
+                id,
+                pub_key,
+                title,
+                similarity,
+            }
         })
         .collect();
     scored.sort_by(|a, b| b.similarity.total_cmp(&a.similarity));
@@ -211,10 +244,23 @@ mod tests {
     #[test]
     fn full_text_search_matches_title_and_abstract() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        fetched_doc(&conn, "EP1111111", "Apparatus for bricks", "About manufacturing bricks");
-        fetched_doc(&conn, "EP2222222", "Telescope mount", "About observing stars");
+        fetched_doc(
+            &conn,
+            "EP1111111",
+            "Apparatus for bricks",
+            "About manufacturing bricks",
+        );
+        fetched_doc(
+            &conn,
+            "EP2222222",
+            "Telescope mount",
+            "About observing stars",
+        );
 
-        let filters = LibraryFilters { query: Some("bricks".to_string()), ..Default::default() };
+        let filters = LibraryFilters {
+            query: Some("bricks".to_string()),
+            ..Default::default()
+        };
         let rows = search(&conn, &filters).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].pub_key, "EP1111111");
@@ -223,18 +269,36 @@ mod tests {
     #[test]
     fn include_tag_filter_requires_all_listed_tags() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let battery_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let battery_id =
+            tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
         let solar_id = tags::create(&conn, "Solar", "About solar", None, None, NOW).unwrap();
         let battery = tags::get(&conn, battery_id).unwrap().unwrap();
         let solar = tags::get(&conn, solar_id).unwrap().unwrap();
 
         let both_id = fetched_doc(&conn, "EP1111111", "A", "a");
-        labels::validate_document(&conn, both_id, &[battery.clone(), solar.clone()], &[battery_id, solar_id].into_iter().collect::<HashSet<_>>(), NOW).unwrap();
+        labels::validate_document(
+            &conn,
+            both_id,
+            &[battery.clone(), solar.clone()],
+            &[battery_id, solar_id].into_iter().collect::<HashSet<_>>(),
+            NOW,
+        )
+        .unwrap();
 
         let only_battery_id = fetched_doc(&conn, "EP2222222", "B", "b");
-        labels::validate_document(&conn, only_battery_id, &[battery.clone(), solar.clone()], &[battery_id].into_iter().collect::<HashSet<_>>(), NOW).unwrap();
+        labels::validate_document(
+            &conn,
+            only_battery_id,
+            &[battery.clone(), solar.clone()],
+            &[battery_id].into_iter().collect::<HashSet<_>>(),
+            NOW,
+        )
+        .unwrap();
 
-        let filters = LibraryFilters { include_tag_ids: vec![battery_id, solar_id], ..Default::default() };
+        let filters = LibraryFilters {
+            include_tag_ids: vec![battery_id, solar_id],
+            ..Default::default()
+        };
         let rows = search(&conn, &filters).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].pub_key, "EP1111111");
@@ -243,14 +307,25 @@ mod tests {
     #[test]
     fn exclude_tag_filter_removes_any_listed_tag() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let battery_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
+        let battery_id =
+            tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
         let battery = tags::get(&conn, battery_id).unwrap().unwrap();
 
         let tagged_id = fetched_doc(&conn, "EP1111111", "A", "a");
-        labels::validate_document(&conn, tagged_id, std::slice::from_ref(&battery), &[battery_id].into_iter().collect::<HashSet<_>>(), NOW).unwrap();
+        labels::validate_document(
+            &conn,
+            tagged_id,
+            std::slice::from_ref(&battery),
+            &[battery_id].into_iter().collect::<HashSet<_>>(),
+            NOW,
+        )
+        .unwrap();
         fetched_doc(&conn, "EP2222222", "B", "b");
 
-        let filters = LibraryFilters { exclude_tag_ids: vec![battery_id], ..Default::default() };
+        let filters = LibraryFilters {
+            exclude_tag_ids: vec![battery_id],
+            ..Default::default()
+        };
         let rows = search(&conn, &filters).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].pub_key, "EP2222222");
@@ -261,12 +336,24 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         let with_text = fetched_doc(&conn, "EP1111111", "A", "a");
         fetched_doc(&conn, "EP2222222", "B", "b");
-        crate::fulltext::store_fetched(&conn, with_text, Some("[0001] text"), None, "DE", "EP.1.A1", true, NOW)
-            .unwrap();
+        crate::fulltext::store_fetched(
+            &conn,
+            with_text,
+            Some("[0001] text"),
+            None,
+            "DE",
+            "EP.1.A1",
+            true,
+            NOW,
+        )
+        .unwrap();
 
         let available = search(
             &conn,
-            &LibraryFilters { fulltext_availability: Some("available".to_string()), ..Default::default() },
+            &LibraryFilters {
+                fulltext_availability: Some("available".to_string()),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(available.len(), 1);
@@ -274,7 +361,10 @@ mod tests {
 
         let unavailable = search(
             &conn,
-            &LibraryFilters { fulltext_availability: Some("unavailable".to_string()), ..Default::default() },
+            &LibraryFilters {
+                fulltext_availability: Some("unavailable".to_string()),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(unavailable.len(), 1);
@@ -305,7 +395,10 @@ mod tests {
 
         let available = search(
             &conn,
-            &LibraryFilters { drawings_availability: Some("available".to_string()), ..Default::default() },
+            &LibraryFilters {
+                drawings_availability: Some("available".to_string()),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(available.len(), 1);

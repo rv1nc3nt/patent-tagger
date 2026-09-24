@@ -15,7 +15,10 @@ const AUDIT_WINDOW: i64 = 50;
 /// Fraction of the last (up to) 50 automatic `pos` decisions for `tag_id`
 /// that a human later confirmed as `pos` too, paired with how many such
 /// audited decisions exist. `None` precision when there are none yet.
-pub fn audited_precision(conn: &Connection, tag_id: i64) -> Result<(Option<f32>, i64), StorageError> {
+pub fn audited_precision(
+    conn: &Connection,
+    tag_id: i64,
+) -> Result<(Option<f32>, i64), StorageError> {
     // For each `auto`/`pos` label_history row, find the next `human` row
     // for the same document+tag (the validation that audited it).
     let mut stmt = conn.prepare(
@@ -59,7 +62,10 @@ pub fn audited_precision(conn: &Connection, tag_id: i64) -> Result<(Option<f32>,
 /// [`audited_precision`] (SPEC 7.5's separate, simpler per-tag automatic-
 /// mode safeguard, which only ever considers `pos` decisions and keeps
 /// its own 50-item window) - see docs/DECISIONS.md.
-pub fn auto_completion_audit(conn: &Connection, tag_id: i64) -> Result<(Option<f32>, Option<f32>, i64), StorageError> {
+pub fn auto_completion_audit(
+    conn: &Connection,
+    tag_id: i64,
+) -> Result<(Option<f32>, Option<f32>, i64), StorageError> {
     let mut stmt = conn.prepare(
         "SELECT a.state, (
             SELECT h.state FROM label_history h
@@ -78,7 +84,9 @@ pub fn auto_completion_audit(conn: &Connection, tag_id: i64) -> Result<(Option<f
          LIMIT ?2",
     )?;
     let pairs: Vec<(String, String)> = stmt
-        .query_map(params![tag_id, AUDIT_WINDOW], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .query_map(params![tag_id, AUDIT_WINDOW], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
         .collect::<Result<Vec<_>, _>>()?;
 
     let n = pairs.len() as i64;
@@ -91,8 +99,16 @@ pub fn auto_completion_audit(conn: &Connection, tag_id: i64) -> Result<(Option<f
             _ => {} // ("neg", "neg"): a confirmed true negative, affecting neither metric's numerator or denominator.
         }
     }
-    let precision = if tp + fp > 0 { Some(tp as f32 / (tp + fp) as f32) } else { None };
-    let recall = if tp + fn_ > 0 { Some(tp as f32 / (tp + fn_) as f32) } else { None };
+    let precision = if tp + fp > 0 {
+        Some(tp as f32 / (tp + fp) as f32)
+    } else {
+        None
+    };
+    let recall = if tp + fn_ > 0 {
+        Some(tp as f32 / (tp + fn_) as f32)
+    } else {
+        None
+    };
     Ok((precision, recall, n))
 }
 
@@ -108,8 +124,11 @@ mod tests {
         documents::insert_pending(conn, pub_key, pub_key, NOW).unwrap();
         let doc = documents::find_by_pub_key(conn, pub_key).unwrap().unwrap();
         labels::write_automatic_label(conn, doc.id, tag.id, 0.9, "model@v1", 1, NOW).unwrap();
-        let checked: HashSet<i64> =
-            if human_confirms { [tag.id].into_iter().collect() } else { HashSet::new() };
+        let checked: HashSet<i64> = if human_confirms {
+            [tag.id].into_iter().collect()
+        } else {
+            HashSet::new()
+        };
         labels::validate_document(conn, doc.id, std::slice::from_ref(tag), &checked, NOW).unwrap();
     }
 
@@ -117,12 +136,20 @@ mod tests {
     /// (SPEC 7.6's "confident absence" side) - `human_confirms` means the
     /// human later validated it as `neg` too (a true negative); `false`
     /// means the human overturned it to `pos` (a missed positive, `fn_`).
-    fn auto_neg_then_human(conn: &Connection, pub_key: &str, tag: &tags::TagRow, human_confirms: bool) {
+    fn auto_neg_then_human(
+        conn: &Connection,
+        pub_key: &str,
+        tag: &tags::TagRow,
+        human_confirms: bool,
+    ) {
         documents::insert_pending(conn, pub_key, pub_key, NOW).unwrap();
         let doc = documents::find_by_pub_key(conn, pub_key).unwrap().unwrap();
         labels::write_automatic_neg_label(conn, doc.id, tag.id, 0.05, "model@v1", 1, NOW).unwrap();
-        let checked: HashSet<i64> =
-            if human_confirms { HashSet::new() } else { [tag.id].into_iter().collect() };
+        let checked: HashSet<i64> = if human_confirms {
+            HashSet::new()
+        } else {
+            [tag.id].into_iter().collect()
+        };
         labels::validate_document(conn, doc.id, std::slice::from_ref(tag), &checked, NOW).unwrap();
     }
 
@@ -156,7 +183,9 @@ mod tests {
         let tag = tags::get(&conn, tag_id).unwrap().unwrap();
 
         documents::insert_pending(&conn, "EP0000001", "EP0000001", NOW).unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP0000001").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP0000001")
+            .unwrap()
+            .unwrap();
         labels::write_automatic_label(&conn, doc.id, tag.id, 0.9, "model@v1", 1, NOW).unwrap();
 
         assert_eq!(audited_precision(&conn, tag_id).unwrap(), (None, 0));
@@ -219,13 +248,19 @@ mod tests {
         }
 
         let (_, _, n) = auto_completion_audit(&conn, tag_id).unwrap();
-        assert_eq!(n, 50, "the window is shared across pos and neg decisions, not 50 of each");
+        assert_eq!(
+            n, 50,
+            "the window is shared across pos and neg decisions, not 50 of each"
+        );
     }
 
     #[test]
     fn auto_completion_audit_is_none_without_any_audited_decisions() {
         let conn = storage::open_in_memory().expect("in-memory db");
         let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, NOW).unwrap();
-        assert_eq!(auto_completion_audit(&conn, tag_id).unwrap(), (None, None, 0));
+        assert_eq!(
+            auto_completion_audit(&conn, tag_id).unwrap(),
+            (None, None, 0)
+        );
     }
 }

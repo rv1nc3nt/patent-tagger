@@ -59,7 +59,8 @@ pub fn score_one_tag(
     };
 
     let neighbours = validated_neighbours.get_or_insert_with(|| {
-        embeddings::list_validated_document_embeddings(conn, embedder.model_id()).unwrap_or_default()
+        embeddings::list_validated_document_embeddings(conn, embedder.model_id())
+            .unwrap_or_default()
     });
     let labels_for_tag = labels::human_labels_for_tag(conn, tag.id)?;
     let knn = scoring::knn_score(doc_vector, neighbours, &labels_for_tag);
@@ -67,7 +68,10 @@ pub fn score_one_tag(
     let trained_classifier = classifier::load(conn, tag.id, embedder.model_id())?;
     let lr = trained_classifier.as_ref().map(|c| c.predict(doc_vector));
 
-    let model_version = match trained_classifier.as_ref().and_then(|c| c.trained_at.as_deref()) {
+    let model_version = match trained_classifier
+        .as_ref()
+        .and_then(|c| c.trained_at.as_deref())
+    {
         Some(trained_at) => format!("{}+lr@{trained_at}", embedder.model_id()),
         None => embedder.model_id().to_string(),
     };
@@ -98,7 +102,9 @@ pub fn score_document(
     for tag in active_tags {
         let (score, source, model_version) = match &doc_vector {
             None => (None, None, embedder.model_id().to_string()),
-            Some(doc_vector) => score_one_tag(conn, embedder, tag, doc_vector, &mut validated_neighbours)?,
+            Some(doc_vector) => {
+                score_one_tag(conn, embedder, tag, doc_vector, &mut validated_neighbours)?
+            }
         };
 
         let effective_threshold = tag.threshold.unwrap_or(0.5);
@@ -155,7 +161,13 @@ pub fn document_view(
     let fulltext = core_lib::fulltext::get(conn, doc_id)?;
     let drawings_status = core_lib::drawings::get_status(conn, doc_id)?;
     let drawing_pages = core_lib::drawings::list_pages(conn, doc_id)?;
-    Ok(Some(DocumentView { detail, tags, fulltext, drawings_status, drawing_pages }))
+    Ok(Some(DocumentView {
+        detail,
+        tags,
+        fulltext,
+        drawings_status,
+        drawing_pages,
+    }))
 }
 
 /// Reads one converted drawing page (or the `FirstPageClipping` thumbnail
@@ -201,7 +213,17 @@ pub fn queue_ordered_by_uncertainty(
         let scores = score_document(conn, embedder, &active_tags, entry.id)?;
         let distance = scores
             .iter()
-            .filter_map(|s| s.score.map(|score| (score - active_tags.iter().find(|t| t.id == s.tag_id).and_then(|t| t.threshold).unwrap_or(0.5)).abs()))
+            .filter_map(|s| {
+                s.score.map(|score| {
+                    (score
+                        - active_tags
+                            .iter()
+                            .find(|t| t.id == s.tag_id)
+                            .and_then(|t| t.threshold)
+                            .unwrap_or(0.5))
+                    .abs()
+                })
+            })
             .fold(f32::INFINITY, f32::min);
         distances.push(distance);
     }

@@ -174,7 +174,9 @@ async fn fetch_and_select(
     let (country, number) = split_pub_key(pub_key);
 
     let body = client
-        .get(&format!("/published-data/publication/docdb/{country}.{number}/biblio,abstract"))
+        .get(&format!(
+            "/published-data/publication/docdb/{country}.{number}/biblio,abstract"
+        ))
         .await?;
     let mut publications = biblio::parse(&body)?;
     if publications.is_empty() {
@@ -189,19 +191,23 @@ async fn fetch_and_select(
     let requested_candidate = to_candidate(&requested);
     let mut sibling_candidates: Vec<Candidate> = all_candidates.iter().map(to_candidate).collect();
 
-    let mut abstract_selected = selection::select_abstract(&requested_candidate, &sibling_candidates);
+    let mut abstract_selected =
+        selection::select_abstract(&requested_candidate, &sibling_candidates);
 
     if abstract_selected.is_none() {
         // Step 3 of the cascade: no English abstract among the requested
         // publication's own siblings, so widen the search to the family.
         if let Ok(family_body) = client
-            .get(&format!("/family/publication/docdb/{country}.{number}/biblio,abstract"))
+            .get(&format!(
+                "/family/publication/docdb/{country}.{number}/biblio,abstract"
+            ))
             .await
         {
             if let Ok(family_publications) = biblio::parse(&family_body) {
                 let family_candidates: Vec<Candidate> =
                     family_publications.iter().map(to_candidate).collect();
-                abstract_selected = selection::select_abstract(&requested_candidate, &family_candidates);
+                abstract_selected =
+                    selection::select_abstract(&requested_candidate, &family_candidates);
                 all_candidates.extend(family_publications);
                 sibling_candidates = family_candidates;
             }
@@ -212,7 +218,11 @@ async fn fetch_and_select(
 
     let source_publication = abstract_selected
         .as_ref()
-        .and_then(|s| all_candidates.iter().find(|p| p.docdb_id == s.source_docdb_id))
+        .and_then(|s| {
+            all_candidates
+                .iter()
+                .find(|p| p.docdb_id == s.source_docdb_id)
+        })
         .unwrap_or(&requested);
 
     let mut kind_codes: Vec<String> = std::iter::once(requested.kind.clone())
@@ -237,7 +247,10 @@ async fn fetch_and_select(
             .application_number
             .clone()
             .or_else(|| source_publication.application_number.clone()),
-        family_id: requested.family_id.clone().or_else(|| source_publication.family_id.clone()),
+        family_id: requested
+            .family_id
+            .clone()
+            .or_else(|| source_publication.family_id.clone()),
         kind_codes,
     })
 }
@@ -305,7 +318,13 @@ mod tests {
         };
         let candidate = to_candidate(&publication);
         assert_eq!(candidate.docdb_id, "EP.1.A1");
-        assert_eq!(candidate.application_number.as_deref(), Some("EP2020000001"));
-        assert_eq!(candidate.titles.get("en").map(String::as_str), Some("A gadget"));
+        assert_eq!(
+            candidate.application_number.as_deref(),
+            Some("EP2020000001")
+        );
+        assert_eq!(
+            candidate.titles.get("en").map(String::as_str),
+            Some("A gadget")
+        );
     }
 }

@@ -7,7 +7,9 @@
 //! imports (SPEC 5.4) - callers drain `import_worker::run` first.
 
 use core_lib::rusqlite::Connection;
-use core_lib::selection::{self, DrawingsCandidate, DrawingsSelected, FulltextCandidate, FulltextSelected};
+use core_lib::selection::{
+    self, DrawingsCandidate, DrawingsSelected, FulltextCandidate, FulltextSelected,
+};
 use core_lib::{documents, drawings, fulltext, jobs, storage::StorageError, time};
 use ops_lib::biblio::{self, Publication};
 use ops_lib::client::OpsClient;
@@ -124,7 +126,10 @@ struct DocContext {
     abstract_source: Option<String>,
 }
 
-fn load_context(conn_mutex: &std::sync::Mutex<Connection>, doc_id: i64) -> Result<DocContext, OpsError> {
+fn load_context(
+    conn_mutex: &std::sync::Mutex<Connection>,
+    doc_id: i64,
+) -> Result<DocContext, OpsError> {
     let conn = conn_mutex.lock().expect("db mutex poisoned");
     let detail = documents::get_full(&conn, doc_id)
         .map_err(|e| OpsError::Parse(e.to_string()))?
@@ -143,7 +148,10 @@ async fn process_fulltext(
     now: &str,
 ) -> Result<(), OpsError> {
     let ctx = load_context(conn_mutex, doc_id)?;
-    let requested_docdb = ctx.abstract_source.clone().unwrap_or_else(|| ctx.pub_key.clone());
+    let requested_docdb = ctx
+        .abstract_source
+        .clone()
+        .unwrap_or_else(|| ctx.pub_key.clone());
 
     let requested_langs = fetch_fulltext_langs(client, &requested_docdb).await?;
     let requested_candidate = FulltextCandidate {
@@ -176,8 +184,10 @@ async fn process_fulltext(
                 let mut seen: std::collections::HashSet<String> =
                     candidates.iter().map(|c| c.docdb_id.clone()).collect();
                 seen.insert(requested_docdb.clone());
-                let new_family_members: Vec<Publication> =
-                    family.into_iter().filter(|p| !seen.contains(&p.docdb_id)).collect();
+                let new_family_members: Vec<Publication> = family
+                    .into_iter()
+                    .filter(|p| !seen.contains(&p.docdb_id))
+                    .collect();
                 for p in &new_family_members {
                     seen.insert(p.docdb_id.clone());
                     let langs = fetch_fulltext_langs(client, &p.docdb_id).await?;
@@ -209,8 +219,22 @@ async fn finish_fulltext(
     now: &str,
 ) -> Result<(), OpsError> {
     let lang = selected.lang.to_lowercase();
-    let description = fetch_part(client, &selected.source_docdb_id, "description", &lang, ops_fulltext::parse_description).await?;
-    let claims = fetch_part(client, &selected.source_docdb_id, "claims", &lang, ops_fulltext::parse_claims).await?;
+    let description = fetch_part(
+        client,
+        &selected.source_docdb_id,
+        "description",
+        &lang,
+        ops_fulltext::parse_description,
+    )
+    .await?;
+    let claims = fetch_part(
+        client,
+        &selected.source_docdb_id,
+        "claims",
+        &lang,
+        ops_fulltext::parse_claims,
+    )
+    .await?;
 
     let conn = conn_mutex.lock().expect("db mutex poisoned");
     fulltext::store_fetched(
@@ -233,16 +257,32 @@ async fn fetch_part(
     lang: &str,
     parse: impl Fn(&str, &str) -> Result<Option<(String, String)>, OpsError>,
 ) -> Result<Option<String>, OpsError> {
-    match client.get(&format!("/published-data/publication/docdb/{docdb_id}/{part}")).await {
+    match client
+        .get(&format!(
+            "/published-data/publication/docdb/{docdb_id}/{part}"
+        ))
+        .await
+    {
         Ok(body) => Ok(parse(&body, lang)?.map(|(_, text)| text)),
         Err(OpsError::Api { status: 404, .. }) => Ok(None),
         Err(e) => Err(e),
     }
 }
 
-async fn fetch_fulltext_langs(client: &OpsClient, docdb_id: &str) -> Result<BTreeSet<String>, OpsError> {
-    match client.get(&format!("/published-data/publication/docdb/{docdb_id}/fulltext")).await {
-        Ok(body) => Ok(ops_fulltext::parse_inquiry(&body)?.into_iter().map(|i| i.lang).collect()),
+async fn fetch_fulltext_langs(
+    client: &OpsClient,
+    docdb_id: &str,
+) -> Result<BTreeSet<String>, OpsError> {
+    match client
+        .get(&format!(
+            "/published-data/publication/docdb/{docdb_id}/fulltext"
+        ))
+        .await
+    {
+        Ok(body) => Ok(ops_fulltext::parse_inquiry(&body)?
+            .into_iter()
+            .map(|i| i.lang)
+            .collect()),
         Err(OpsError::Api { status: 404, .. }) => Ok(BTreeSet::new()),
         Err(e) => Err(e),
     }
@@ -266,7 +306,10 @@ async fn process_drawings(
     // retrieved (e.g. the fulltext policy is "never").
     let requested_docdb = {
         let conn = conn_mutex.lock().expect("db mutex poisoned");
-        fulltext::get(&conn, doc_id).ok().flatten().and_then(|f| f.source)
+        fulltext::get(&conn, doc_id)
+            .ok()
+            .flatten()
+            .and_then(|f| f.source)
     }
     .or_else(|| ctx.abstract_source.clone())
     .unwrap_or_else(|| ctx.pub_key.clone());
@@ -302,8 +345,10 @@ async fn process_drawings(
                 let mut seen: std::collections::HashSet<String> =
                     candidates.iter().map(|c| c.docdb_id.clone()).collect();
                 seen.insert(requested_docdb.clone());
-                let new_family_members: Vec<Publication> =
-                    family.into_iter().filter(|p| !seen.contains(&p.docdb_id)).collect();
+                let new_family_members: Vec<Publication> = family
+                    .into_iter()
+                    .filter(|p| !seen.contains(&p.docdb_id))
+                    .collect();
                 for p in &new_family_members {
                     seen.insert(p.docdb_id.clone());
                     let instances = fetch_images_inquiry(client, &p.docdb_id).await?;
@@ -319,7 +364,8 @@ async fn process_drawings(
         }
     }
 
-    let Some(DrawingsSelected { source_docdb_id }) = selection::select_drawings(&requested_candidate, &candidates)
+    let Some(DrawingsSelected { source_docdb_id }) =
+        selection::select_drawings(&requested_candidate, &candidates)
     else {
         let conn = conn_mutex.lock().expect("db mutex poisoned");
         drawings::store_not_available(&conn, doc_id, now).map_err(storage_err)?;
@@ -342,8 +388,18 @@ async fn process_drawings(
         .map_err(|e| OpsError::Parse(format!("creating drawings directory: {e}")))?;
 
     for page in 1..=drawing.number_of_pages {
-        fetch_and_store_page(conn_mutex, client, &pages_dir, &ctx.pub_key, doc_id, &source_docdb_id, &drawing.link, page as i64, now)
-            .await?;
+        fetch_and_store_page(
+            conn_mutex,
+            client,
+            &pages_dir,
+            &ctx.pub_key,
+            doc_id,
+            &source_docdb_id,
+            &drawing.link,
+            page as i64,
+            now,
+        )
+        .await?;
     }
 
     // SPEC 5.5: "also retrieve the FirstPageClipping...it serves as the
@@ -365,8 +421,14 @@ async fn process_drawings(
     }
 
     let conn = conn_mutex.lock().expect("db mutex poisoned");
-    drawings::store_fetched_status(&conn, doc_id, drawing.number_of_pages as i64, &source_docdb_id, now)
-        .map_err(storage_err)
+    drawings::store_fetched_status(
+        &conn,
+        doc_id,
+        drawing.number_of_pages as i64,
+        &source_docdb_id,
+        now,
+    )
+    .map_err(storage_err)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -387,18 +449,39 @@ async fn fetch_and_store_page(
     let (width, height, png_bytes) = ops_images::tiff_page_to_png(&tiff_bytes)
         .map_err(|e| OpsError::Parse(format!("converting drawing page {page}: {e}")))?;
 
-    let file_name = if page == THUMBNAIL_PAGE { "thumbnail.png".to_string() } else { format!("{page:03}.png") };
+    let file_name = if page == THUMBNAIL_PAGE {
+        "thumbnail.png".to_string()
+    } else {
+        format!("{page:03}.png")
+    };
     let relative_path = format!("drawings/{pub_key}/{file_name}");
     std::fs::write(pages_dir.join(&file_name), &png_bytes)
         .map_err(|e| OpsError::Parse(format!("writing drawing page {page}: {e}")))?;
 
     let conn = conn_mutex.lock().expect("db mutex poisoned");
-    drawings::insert_page(&conn, doc_id, page, source_docdb_id, &relative_path, width as i64, height as i64, now)
-        .map_err(storage_err)
+    drawings::insert_page(
+        &conn,
+        doc_id,
+        page,
+        source_docdb_id,
+        &relative_path,
+        width as i64,
+        height as i64,
+        now,
+    )
+    .map_err(storage_err)
 }
 
-async fn fetch_images_inquiry(client: &OpsClient, docdb_id: &str) -> Result<Vec<DocumentInstance>, OpsError> {
-    match client.get(&format!("/published-data/publication/docdb/{docdb_id}/images")).await {
+async fn fetch_images_inquiry(
+    client: &OpsClient,
+    docdb_id: &str,
+) -> Result<Vec<DocumentInstance>, OpsError> {
+    match client
+        .get(&format!(
+            "/published-data/publication/docdb/{docdb_id}/images"
+        ))
+        .await
+    {
         Ok(body) => ops_images::parse_images_inquiry(&body),
         Err(OpsError::Api { status: 404, .. }) => Ok(vec![]),
         Err(e) => Err(e),
@@ -409,16 +492,28 @@ async fn fetch_images_inquiry(client: &OpsClient, docdb_id: &str) -> Result<Vec<
 /// import time - SPEC 5.5's "another publication of the same application"
 /// is, in practice, every kind-code variant OPS returns for this
 /// publication number (see `import_worker::fetch_and_select`).
-async fn fetch_siblings(client: &OpsClient, country: &str, number: &str) -> Result<Vec<Publication>, OpsError> {
+async fn fetch_siblings(
+    client: &OpsClient,
+    country: &str,
+    number: &str,
+) -> Result<Vec<Publication>, OpsError> {
     let body = client
-        .get(&format!("/published-data/publication/docdb/{country}.{number}/biblio,abstract"))
+        .get(&format!(
+            "/published-data/publication/docdb/{country}.{number}/biblio,abstract"
+        ))
         .await?;
     biblio::parse(&body)
 }
 
-async fn fetch_family(client: &OpsClient, country: &str, number: &str) -> Result<Vec<Publication>, OpsError> {
+async fn fetch_family(
+    client: &OpsClient,
+    country: &str,
+    number: &str,
+) -> Result<Vec<Publication>, OpsError> {
     let body = client
-        .get(&format!("/family/publication/docdb/{country}.{number}/biblio,abstract"))
+        .get(&format!(
+            "/family/publication/docdb/{country}.{number}/biblio,abstract"
+        ))
         .await?;
     biblio::parse(&body)
 }
@@ -435,7 +530,10 @@ fn storage_err(e: StorageError) -> OpsError {
 
 fn now_iso8601() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     time::format_unix_timestamp(secs)
 }
 
@@ -452,7 +550,10 @@ mod tests {
     #[test]
     fn has_english_is_case_insensitive() {
         assert!(has_english(&BTreeSet::from(["EN".to_string()])));
-        assert!(!has_english(&BTreeSet::from(["DE".to_string(), "FR".to_string()])));
+        assert!(!has_english(&BTreeSet::from([
+            "DE".to_string(),
+            "FR".to_string()
+        ])));
         assert!(!has_english(&BTreeSet::new()));
     }
 }

@@ -129,7 +129,11 @@ pub struct FetchedData {
 /// Persists OPS data fetched for a document (SPEC section 5.3), setting
 /// `fetch_status` to `"fetched"` when an English abstract was found, or
 /// `"no_english_abstract"` when `data.abstract_text` is `None`.
-pub fn store_fetched(conn: &Connection, doc_id: i64, data: &FetchedData) -> Result<(), StorageError> {
+pub fn store_fetched(
+    conn: &Connection,
+    doc_id: i64,
+    data: &FetchedData,
+) -> Result<(), StorageError> {
     let fetch_status = if data.abstract_text.is_some() {
         "fetched"
     } else {
@@ -318,7 +322,10 @@ mod tests {
 
         let second = insert_pending(&conn, "EP1234567", "EP 1 234 567", "2026-01-01T00:00:01Z")
             .expect("insert should succeed");
-        assert_eq!(second, None, "a duplicate pub_key should be reported, not inserted");
+        assert_eq!(
+            second, None,
+            "a duplicate pub_key should be reported, not inserted"
+        );
     }
 
     #[test]
@@ -381,7 +388,9 @@ mod tests {
     #[test]
     fn mark_auto_completed_sets_the_review_state() {
         let conn = storage::open_in_memory().expect("in-memory db");
-        let doc_id = insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z").unwrap().unwrap();
+        let doc_id = insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z")
+            .unwrap()
+            .unwrap();
         mark_auto_completed(&conn, doc_id).unwrap();
         let doc = find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
         assert_eq!(doc.review_state, "auto_completed");

@@ -120,12 +120,23 @@ pub fn select_fulltext(
     family_members: &[FulltextCandidate],
 ) -> Option<FulltextSelected> {
     if let Some(selected) = fulltext_cascade(requested, family_members, |c| {
-        c.langs.iter().find(|l| l.eq_ignore_ascii_case("en")).cloned()
+        c.langs
+            .iter()
+            .find(|l| l.eq_ignore_ascii_case("en"))
+            .cloned()
     }) {
-        return Some(FulltextSelected { non_english_only: false, ..selected });
+        return Some(FulltextSelected {
+            non_english_only: false,
+            ..selected
+        });
     }
-    fulltext_cascade(requested, family_members, |c| c.langs.iter().next().cloned())
-        .map(|selected| FulltextSelected { non_english_only: true, ..selected })
+    fulltext_cascade(requested, family_members, |c| {
+        c.langs.iter().next().cloned()
+    })
+    .map(|selected| FulltextSelected {
+        non_english_only: true,
+        ..selected
+    })
 }
 
 fn fulltext_cascade(
@@ -141,21 +152,33 @@ fn fulltext_cascade(
         });
     }
 
-    let others = || family_members.iter().filter(|c| c.docdb_id != requested.docdb_id);
+    let others = || {
+        family_members
+            .iter()
+            .filter(|c| c.docdb_id != requested.docdb_id)
+    };
 
     if let Some(app_num) = requested.application_number.as_deref() {
         if let Some((c, lang)) = others()
             .filter(|c| c.application_number.as_deref() == Some(app_num))
             .find_map(|c| pick_lang(c).map(|lang| (c, lang)))
         {
-            return Some(FulltextSelected { source_docdb_id: c.docdb_id.clone(), lang, non_english_only: false });
+            return Some(FulltextSelected {
+                source_docdb_id: c.docdb_id.clone(),
+                lang,
+                non_english_only: false,
+            });
         }
     }
 
     others()
         .filter_map(|c| pick_lang(c).map(|lang| (c, lang)))
         .min_by_key(|(c, _)| family_country_priority(&c.country))
-        .map(|(c, lang)| FulltextSelected { source_docdb_id: c.docdb_id.clone(), lang, non_english_only: false })
+        .map(|(c, lang)| FulltextSelected {
+            source_docdb_id: c.docdb_id.clone(),
+            lang,
+            non_english_only: false,
+        })
 }
 
 /// A publication considered as a drawings source (SPEC 5.5). Drawings are
@@ -187,43 +210,66 @@ pub fn select_drawings(
     family_members: &[DrawingsCandidate],
 ) -> Option<DrawingsSelected> {
     if requested.has_drawings {
-        return Some(DrawingsSelected { source_docdb_id: requested.docdb_id.clone() });
+        return Some(DrawingsSelected {
+            source_docdb_id: requested.docdb_id.clone(),
+        });
     }
 
-    let others = || family_members.iter().filter(|c| c.docdb_id != requested.docdb_id);
+    let others = || {
+        family_members
+            .iter()
+            .filter(|c| c.docdb_id != requested.docdb_id)
+    };
 
     if let Some(app_num) = requested.application_number.as_deref() {
         if let Some(c) =
             others().find(|c| c.application_number.as_deref() == Some(app_num) && c.has_drawings)
         {
-            return Some(DrawingsSelected { source_docdb_id: c.docdb_id.clone() });
+            return Some(DrawingsSelected {
+                source_docdb_id: c.docdb_id.clone(),
+            });
         }
     }
 
     others()
         .filter(|c| c.has_drawings)
         .min_by_key(|c| family_country_priority(&c.country))
-        .map(|c| DrawingsSelected { source_docdb_id: c.docdb_id.clone() })
+        .map(|c| DrawingsSelected {
+            source_docdb_id: c.docdb_id.clone(),
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn candidate(docdb_id: &str, country: &str, app_num: Option<&str>, langs: &[(&str, &str)]) -> Candidate {
+    fn candidate(
+        docdb_id: &str,
+        country: &str,
+        app_num: Option<&str>,
+        langs: &[(&str, &str)],
+    ) -> Candidate {
         Candidate {
             docdb_id: docdb_id.to_string(),
             country: country.to_string(),
             application_number: app_num.map(str::to_string),
             titles: BTreeMap::new(),
-            abstracts: langs.iter().map(|(l, t)| (l.to_string(), t.to_string())).collect(),
+            abstracts: langs
+                .iter()
+                .map(|(l, t)| (l.to_string(), t.to_string()))
+                .collect(),
         }
     }
 
     #[test]
     fn prefers_the_requested_publications_own_english_abstract() {
         let requested = candidate("EP.1.A1", "EP", Some("EP1"), &[("en", "own abstract")]);
-        let family = vec![candidate("US.1.A", "US", Some("US1"), &[("en", "other abstract")])];
+        let family = vec![candidate(
+            "US.1.A",
+            "US",
+            Some("US1"),
+            &[("en", "other abstract")],
+        )];
         let selected = select_abstract(&requested, &family).unwrap();
         assert_eq!(selected.text, "own abstract");
         assert_eq!(selected.source_docdb_id, "EP.1.A1");
@@ -251,13 +297,21 @@ mod tests {
             candidate("GB.1.A1", "GB", Some("GB1"), &[("en", "GB abstract")]),
         ];
         let selected = select_abstract(&requested, &family).unwrap();
-        assert_eq!(selected.source_docdb_id, "WO.1.A1", "WO should win over US/GB/DE");
+        assert_eq!(
+            selected.source_docdb_id, "WO.1.A1",
+            "WO should win over US/GB/DE"
+        );
     }
 
     #[test]
     fn no_english_anywhere_yields_none() {
         let requested = candidate("EP.1.A1", "EP", Some("EP1"), &[("de", "nur deutsch")]);
-        let family = vec![candidate("EP.1.B1", "EP", Some("EP1"), &[("fr", "seulement en français")])];
+        let family = vec![candidate(
+            "EP.1.B1",
+            "EP",
+            Some("EP1"),
+            &[("fr", "seulement en français")],
+        )];
         assert_eq!(select_abstract(&requested, &family), None);
     }
 
@@ -267,7 +321,12 @@ mod tests {
         // number should only be picked up by the family-fallback step, not
         // mistaken for "another publication of the same application".
         let requested = candidate("EP.1.A1", "EP", Some("EP1"), &[]);
-        let family = vec![candidate("US.1.A1", "US", Some("US-continuation"), &[("en", "US abstract")])];
+        let family = vec![candidate(
+            "US.1.A1",
+            "US",
+            Some("US-continuation"),
+            &[("en", "US abstract")],
+        )];
         let selected = select_abstract(&requested, &family).unwrap();
         assert_eq!(selected.source_docdb_id, "US.1.A1");
     }
@@ -275,9 +334,12 @@ mod tests {
     #[test]
     fn title_selection_follows_the_same_cascade() {
         let mut requested = candidate("EP.1.A1", "EP", Some("EP1"), &[]);
-        requested.titles.insert("de".to_string(), "nur deutsch".to_string());
+        requested
+            .titles
+            .insert("de".to_string(), "nur deutsch".to_string());
         let mut wo = candidate("WO.1.A1", "WO", Some("WO1"), &[]);
-        wo.titles.insert("en".to_string(), "English title".to_string());
+        wo.titles
+            .insert("en".to_string(), "English title".to_string());
         let selected = select_title(&requested, &[wo]).unwrap();
         assert_eq!(selected.text, "English title");
     }
@@ -331,9 +393,17 @@ mod tests {
     #[test]
     fn fulltext_falls_back_to_non_english_when_no_english_exists_anywhere() {
         let requested = fulltext_candidate("EP.1.A1", "EP", Some("EP1"), &["DE"]);
-        let family = vec![fulltext_candidate("US.1.A1", "US", Some("US-continuation"), &["DE", "FR"])];
+        let family = vec![fulltext_candidate(
+            "US.1.A1",
+            "US",
+            Some("US-continuation"),
+            &["DE", "FR"],
+        )];
         let selected = select_fulltext(&requested, &family).unwrap();
-        assert_eq!(selected.source_docdb_id, "EP.1.A1", "own non-English text still beats a family member's");
+        assert_eq!(
+            selected.source_docdb_id, "EP.1.A1",
+            "own non-English text still beats a family member's"
+        );
         assert_eq!(selected.lang, "DE");
         assert!(selected.non_english_only);
     }
@@ -373,7 +443,10 @@ mod tests {
             drawings_candidate("WO.1.A1", "WO", Some("WO1"), true),
         ];
         let selected = select_drawings(&requested, &family).unwrap();
-        assert_eq!(selected.source_docdb_id, "EP.1.A1", "same application should win over a family member");
+        assert_eq!(
+            selected.source_docdb_id, "EP.1.A1",
+            "same application should win over a family member"
+        );
 
         let requested_no_same_app = drawings_candidate("EP.1.B1", "EP", Some("EP1"), false);
         let family_only = vec![

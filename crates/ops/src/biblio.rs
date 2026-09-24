@@ -133,9 +133,9 @@ fn parse_exchange_document(node: Node) -> Result<Publication, OpsError> {
 }
 
 fn application_number_from(app_ref: Node) -> Option<String> {
-    let epodoc = app_ref
-        .children()
-        .find(|n| n.has_tag_name("document-id") && n.attribute("document-id-type") == Some("epodoc"));
+    let epodoc = app_ref.children().find(|n| {
+        n.has_tag_name("document-id") && n.attribute("document-id-type") == Some("epodoc")
+    });
     if let Some(n) = epodoc {
         if let Some(number) = child(n, "doc-number").map(text_of) {
             return Some(number);
@@ -245,13 +245,16 @@ mod tests {
     fn synthetic_ep_b1_has_no_abstract_at_all() {
         let pubs = parse(&fixture("synthetic_ep_b1_no_abstract.xml")).expect("should parse");
         assert!(pubs[0].abstracts.is_empty());
-        assert_eq!(pubs[0].title("en"), Some("Apparatus for manufacturing green bricks"));
+        assert_eq!(
+            pubs[0].title("en"),
+            Some("Apparatus for manufacturing green bricks")
+        );
     }
 
     #[test]
     fn synthetic_ep_a1_has_only_french_and_german() {
-        let pubs =
-            parse(&fixture("synthetic_ep_fr_de_only_a1_biblio_abstract.xml")).expect("should parse");
+        let pubs = parse(&fixture("synthetic_ep_fr_de_only_a1_biblio_abstract.xml"))
+            .expect("should parse");
         let p = &pubs[0];
         assert!(p.title("en").is_none());
         assert!(p.abstract_text("en").is_none());
@@ -261,9 +264,13 @@ mod tests {
 
     #[test]
     fn synthetic_family_has_an_english_wo_member() {
-        let pubs = parse(&fixture("synthetic_family_with_english_wo_member.xml")).expect("should parse");
+        let pubs =
+            parse(&fixture("synthetic_family_with_english_wo_member.xml")).expect("should parse");
         assert_eq!(pubs.len(), 2);
-        let wo = pubs.iter().find(|p| p.country == "WO").expect("WO member present");
+        let wo = pubs
+            .iter()
+            .find(|p| p.country == "WO")
+            .expect("WO member present");
         assert_eq!(wo.abstract_text("en"), Some("The invention relates to a data processing apparatus comprising a processor and a memory."));
     }
 
@@ -292,12 +299,15 @@ mod tests {
     fn family_response_has_multiple_members() {
         let pubs = parse(&fixture("ep1000000_family_biblio.xml")).expect("should parse");
         assert_eq!(pubs.len(), 5);
-        assert!(pubs.iter().any(|p| p.country == "US" && p.doc_number == "6093011"));
+        assert!(pubs
+            .iter()
+            .any(|p| p.country == "US" && p.doc_number == "6093011"));
     }
 
     #[test]
     fn not_found_fault_is_not_valid_exchange_data() {
-        let pubs = parse(&fixture("not_found_fault.xml")).expect("a fault has no exchange-document, which is not itself an error");
+        let pubs = parse(&fixture("not_found_fault.xml"))
+            .expect("a fault has no exchange-document, which is not itself an error");
         assert!(pubs.is_empty());
     }
 }

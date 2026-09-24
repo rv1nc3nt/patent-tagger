@@ -53,15 +53,18 @@ pub fn find_first_page_clipping(instances: &[DocumentInstance]) -> Option<&Docum
 /// byte-alignment.
 pub fn tiff_page_to_png(tiff_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), OpsError> {
     let cursor = std::io::Cursor::new(tiff_bytes);
-    let mut decoder =
-        tiff::decoder::Decoder::new(cursor).map_err(|e| OpsError::Parse(format!("invalid TIFF: {e}")))?;
-    let (width, height) =
-        decoder.dimensions().map_err(|e| OpsError::Parse(format!("reading TIFF dimensions: {e}")))?;
+    let mut decoder = tiff::decoder::Decoder::new(cursor)
+        .map_err(|e| OpsError::Parse(format!("invalid TIFF: {e}")))?;
+    let (width, height) = decoder
+        .dimensions()
+        .map_err(|e| OpsError::Parse(format!("reading TIFF dimensions: {e}")))?;
     let orientation = decoder
         .get_tag_u32(tiff::tags::Tag::Orientation)
         .unwrap_or(1); // 1 = normal, per TIFF/EXIF convention, when the tag is absent.
 
-    let image = decoder.read_image().map_err(|e| OpsError::Parse(format!("decoding TIFF: {e}")))?;
+    let image = decoder
+        .read_image()
+        .map_err(|e| OpsError::Parse(format!("decoding TIFF: {e}")))?;
     let grey = to_grey_bytes(image, width, height)?;
     let (width, height, grey) = apply_orientation(width, height, grey, orientation);
 
@@ -108,14 +111,21 @@ fn to_grey_bytes(
                 Ok(out)
             }
         }
-        other => Err(OpsError::Parse(format!("unsupported TIFF pixel format: {other:?}"))),
+        other => Err(OpsError::Parse(format!(
+            "unsupported TIFF pixel format: {other:?}"
+        ))),
     }
 }
 
 /// TIFF/EXIF `Orientation` tag values 1-8. Only rotation (not mirroring) is
 /// expected in practice for scanned patent pages, but all eight are
 /// handled for correctness.
-fn apply_orientation(width: u32, height: u32, grey: Vec<u8>, orientation: u32) -> (u32, u32, Vec<u8>) {
+fn apply_orientation(
+    width: u32,
+    height: u32,
+    grey: Vec<u8>,
+    orientation: u32,
+) -> (u32, u32, Vec<u8>) {
     let w = width as usize;
     let h = height as usize;
     let get = |x: usize, y: usize| grey[y * w + x];
@@ -123,11 +133,19 @@ fn apply_orientation(width: u32, height: u32, grey: Vec<u8>, orientation: u32) -
     match orientation {
         1 => (width, height, grey),
         2 => (width, height, transform(w, h, |x, y| get(w - 1 - x, y))),
-        3 => (width, height, transform(w, h, |x, y| get(w - 1 - x, h - 1 - y))),
+        3 => (
+            width,
+            height,
+            transform(w, h, |x, y| get(w - 1 - x, h - 1 - y)),
+        ),
         4 => (width, height, transform(w, h, |x, y| get(x, h - 1 - y))),
         5 => (height, width, transform(h, w, |x, y| get(y, x))),
         6 => (height, width, transform(h, w, |x, y| get(y, h - 1 - x))),
-        7 => (height, width, transform(h, w, |x, y| get(w - 1 - y, h - 1 - x))),
+        7 => (
+            height,
+            width,
+            transform(h, w, |x, y| get(w - 1 - y, h - 1 - x)),
+        ),
         8 => (height, width, transform(h, w, |x, y| get(w - 1 - y, x))),
         _ => (width, height, grey),
     }
@@ -149,22 +167,32 @@ mod tests {
     use std::fs;
 
     fn fixture_bytes(name: &str) -> Vec<u8> {
-        fs::read(format!("{}/../../tests/fixtures/ops/{name}", env!("CARGO_MANIFEST_DIR")))
-            .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
+        fs::read(format!(
+            "{}/../../tests/fixtures/ops/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
     }
 
     fn fixture_str(name: &str) -> String {
-        fs::read_to_string(format!("{}/../../tests/fixtures/ops/{name}", env!("CARGO_MANIFEST_DIR")))
-            .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
+        fs::read_to_string(format!(
+            "{}/../../tests/fixtures/ops/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
     }
 
     #[test]
     fn images_inquiry_lists_full_document_drawing_and_clipping() {
-        let instances = parse_images_inquiry(&fixture_str("ep1000000_a1_images_inquiry.xml")).unwrap();
+        let instances =
+            parse_images_inquiry(&fixture_str("ep1000000_a1_images_inquiry.xml")).unwrap();
         assert_eq!(instances.len(), 3);
         let drawing = find_drawing(&instances).unwrap();
         assert_eq!(drawing.number_of_pages, 6);
-        assert_eq!(drawing.link, "published-data/images/EP/1000000/A1/thumbnail");
+        assert_eq!(
+            drawing.link,
+            "published-data/images/EP/1000000/A1/thumbnail"
+        );
         let clipping = find_first_page_clipping(&instances).unwrap();
         assert_eq!(clipping.number_of_pages, 1);
     }
@@ -172,15 +200,21 @@ mod tests {
     #[test]
     fn a_publication_with_no_drawing_instance_is_normal() {
         let instances =
-            parse_images_inquiry(&fixture_str("ep0100001_a1_images_inquiry_no_drawings.xml")).unwrap();
+            parse_images_inquiry(&fixture_str("ep0100001_a1_images_inquiry_no_drawings.xml"))
+                .unwrap();
         assert!(find_drawing(&instances).is_none());
     }
 
     #[test]
     fn decodes_a_real_group4_tiff_page_matching_the_reference_png() {
         let tiff_bytes = fixture_bytes("ep1000000_a1_drawing_page1_group4.tiff");
-        let (width, height, png_bytes) = tiff_page_to_png(&tiff_bytes).expect("should decode and convert");
-        assert_eq!((width, height), (3508, 2479), "orientation-corrected, landscape");
+        let (width, height, png_bytes) =
+            tiff_page_to_png(&tiff_bytes).expect("should decode and convert");
+        assert_eq!(
+            (width, height),
+            (3508, 2479),
+            "orientation-corrected, landscape"
+        );
 
         let reference_png = fixture_bytes("ep1000000_a1_drawing_page1_reference.png");
 
@@ -189,8 +223,12 @@ mod tests {
         // which was produced by an independent, non-Rust check during
         // development - see docs/DECISIONS.md) - decode both back and
         // compare pixel-for-pixel.
-        let ours = png::Decoder::new(std::io::Cursor::new(&png_bytes)).read_info().unwrap();
-        let reference = png::Decoder::new(std::io::Cursor::new(&reference_png)).read_info().unwrap();
+        let ours = png::Decoder::new(std::io::Cursor::new(&png_bytes))
+            .read_info()
+            .unwrap();
+        let reference = png::Decoder::new(std::io::Cursor::new(&reference_png))
+            .read_info()
+            .unwrap();
         assert_eq!(ours.info().width, reference.info().width);
         assert_eq!(ours.info().height, reference.info().height);
 
@@ -204,7 +242,10 @@ mod tests {
         // Our output is 8-bit grey; the reference (from the initial manual
         // verification) is 1-bit grey - compare via black/white classification
         // rather than raw bytes.
-        let our_pixels: Vec<bool> = our_buf[..our_info.buffer_size()].iter().map(|&b| b < 128).collect();
+        let our_pixels: Vec<bool> = our_buf[..our_info.buffer_size()]
+            .iter()
+            .map(|&b| b < 128)
+            .collect();
         let ref_pixels_packed = &ref_buf[..ref_info.buffer_size()];
         let ref_row_bytes = (reference.info().width as usize).div_ceil(8);
         let ref_pixels: Vec<bool> = (0..reference.info().height as usize)
@@ -216,6 +257,9 @@ mod tests {
             })
             .collect();
 
-        assert_eq!(our_pixels, ref_pixels, "decoded pixels should exactly match the independently-produced reference");
+        assert_eq!(
+            our_pixels, ref_pixels,
+            "decoded pixels should exactly match the independently-produced reference"
+        );
     }
 }

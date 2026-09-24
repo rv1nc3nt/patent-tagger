@@ -43,7 +43,10 @@ fn add_dir_to_zip(
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        let relative = path.strip_prefix(root)?.to_string_lossy().replace('\\', "/");
+        let relative = path
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
         if path.is_dir() {
             add_dir_to_zip(zip, root, &path, options)?;
         } else {
@@ -59,7 +62,11 @@ fn add_dir_to_zip(
 /// Restores the database (into the live connection, via SQLite's online
 /// restore) and `drawings/` folder (overwritten in place) from a backup
 /// created by [`create_backup`].
-pub fn restore_backup(data_dir: &Path, conn: &mut Connection, zip_path: &Path) -> anyhow::Result<()> {
+pub fn restore_backup(
+    data_dir: &Path,
+    conn: &mut Connection,
+    zip_path: &Path,
+) -> anyhow::Result<()> {
     let file = std::fs::File::open(zip_path)?;
     let mut archive = ZipArchive::new(file)?;
 
@@ -69,7 +76,11 @@ pub fn restore_backup(data_dir: &Path, conn: &mut Connection, zip_path: &Path) -
         let mut out = std::fs::File::create(snapshot.path())?;
         std::io::copy(&mut db_entry, &mut out)?;
     }
-    conn.restore(MAIN_DB, snapshot.path(), None::<fn(core_lib::rusqlite::backup::Progress)>)?;
+    conn.restore(
+        MAIN_DB,
+        snapshot.path(),
+        None::<fn(core_lib::rusqlite::backup::Progress)>,
+    )?;
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
@@ -102,7 +113,11 @@ mod tests {
         documents::insert_pending(&conn, "EP1234567", "EP1234567", "2026-01-01T00:00:00Z").unwrap();
 
         std::fs::create_dir_all(source_dir.path().join("drawings/EP1234567")).unwrap();
-        std::fs::write(source_dir.path().join("drawings/EP1234567/001.png"), b"fake png bytes").unwrap();
+        std::fs::write(
+            source_dir.path().join("drawings/EP1234567/001.png"),
+            b"fake png bytes",
+        )
+        .unwrap();
 
         let backup_path = source_dir.path().join("backup.zip");
         create_backup(source_dir.path(), &conn, &backup_path).expect("backup should succeed");
@@ -111,16 +126,18 @@ mod tests {
         // Restore into a *different*, freshly created database and data
         // directory, to prove the backup is self-contained.
         let dest_dir = tempfile::tempdir().expect("tempdir");
-        let mut restored_conn = storage::open(&dest_dir.path().join("db.sqlite3")).expect("open db");
-        restore_backup(dest_dir.path(), &mut restored_conn, &backup_path).expect("restore should succeed");
+        let mut restored_conn =
+            storage::open(&dest_dir.path().join("db.sqlite3")).expect("open db");
+        restore_backup(dest_dir.path(), &mut restored_conn, &backup_path)
+            .expect("restore should succeed");
 
         let doc = documents::find_by_pub_key(&restored_conn, "EP1234567")
             .unwrap()
             .expect("the document should have survived the round trip");
         assert_eq!(doc.pub_key, "EP1234567");
 
-        let restored_png =
-            std::fs::read(dest_dir.path().join("drawings/EP1234567/001.png")).expect("drawing should exist");
+        let restored_png = std::fs::read(dest_dir.path().join("drawings/EP1234567/001.png"))
+            .expect("drawing should exist");
         assert_eq!(restored_png, b"fake png bytes");
     }
 }

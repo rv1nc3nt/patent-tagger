@@ -100,9 +100,15 @@ mod tests {
         let (high_n, _) = blend_scores(Some(1.0), Some(0.0), None, 1000).unwrap();
         assert!(low_n < mid_n);
         assert!(mid_n < high_n);
-        assert!((low_n - 0.0).abs() < 1e-6, "at n_pos=0, w=0, so score should be all k-NN");
+        assert!(
+            (low_n - 0.0).abs() < 1e-6,
+            "at n_pos=0, w=0, so score should be all k-NN"
+        );
         assert!((mid_n - 0.5).abs() < 1e-6, "at n_pos=20, w=0.5 exactly");
-        assert!(high_n > 0.9, "at n_pos=1000, w should be close to 1 (mostly LR)");
+        assert!(
+            high_n > 0.9,
+            "at n_pos=1000, w should be close to 1 (mostly LR)"
+        );
     }
 
     #[test]
@@ -113,7 +119,10 @@ mod tests {
 
     #[test]
     fn blend_falls_back_to_zero_shot_only_when_nothing_else_is_available() {
-        assert_eq!(blend_scores(None, None, Some(0.6), 1), Some((0.6, "zero_shot")));
+        assert_eq!(
+            blend_scores(None, None, Some(0.6), 1),
+            Some((0.6, "zero_shot"))
+        );
         assert_eq!(blend_scores(None, None, None, 1), None);
     }
 
@@ -158,7 +167,10 @@ mod tests {
         labels.insert(2, LabelState::Neg);
 
         let score = knn_score(&doc, &neighbours, &labels).unwrap();
-        assert!((score - 1.0).abs() < 1e-6, "the only-weighted neighbour is fully positive");
+        assert!(
+            (score - 1.0).abs() < 1e-6,
+            "the only-weighted neighbour is fully positive"
+        );
     }
 
     #[test]

@@ -38,7 +38,12 @@ pub struct OpsClient {
 
 impl OpsClient {
     pub fn new(consumer_key: String, consumer_secret: String) -> Self {
-        Self::with_urls(OPS_REST_BASE_URL, OPS_AUTH_URL, consumer_key, consumer_secret)
+        Self::with_urls(
+            OPS_REST_BASE_URL,
+            OPS_AUTH_URL,
+            consumer_key,
+            consumer_secret,
+        )
     }
 
     /// For tests or an alternate deployment; production code should use
@@ -91,13 +96,20 @@ impl OpsClient {
                 }
             }
         }
-        Err(last_err.unwrap_or(OpsError::Parse("retry loop exited without a result".to_string())))
+        Err(last_err.unwrap_or(OpsError::Parse(
+            "retry loop exited without a result".to_string(),
+        )))
     }
 
     async fn try_get(&self, path: &str) -> Result<String, OpsError> {
         let token = self
             .tokens
-            .get(&self.http, &self.auth_url, &self.consumer_key, &self.consumer_secret)
+            .get(
+                &self.http,
+                &self.auth_url,
+                &self.consumer_key,
+                &self.consumer_secret,
+            )
             .await?;
 
         let response = self
@@ -138,7 +150,11 @@ impl OpsClient {
     /// live host, see docs/DECISIONS.md), returning the raw response body
     /// bytes (a TIFF image) rather than assuming XML text. Same auth/
     /// throttle/retry behaviour as [`OpsClient::get`].
-    pub async fn get_bytes(&self, path: &str, extra_header: (&str, &str)) -> Result<Vec<u8>, OpsError> {
+    pub async fn get_bytes(
+        &self,
+        path: &str,
+        extra_header: (&str, &str),
+    ) -> Result<Vec<u8>, OpsError> {
         self.wait_for_throttle_clearance().await?;
         let _permit = self
             .concurrency
@@ -165,13 +181,24 @@ impl OpsClient {
                 }
             }
         }
-        Err(last_err.unwrap_or(OpsError::Parse("retry loop exited without a result".to_string())))
+        Err(last_err.unwrap_or(OpsError::Parse(
+            "retry loop exited without a result".to_string(),
+        )))
     }
 
-    async fn try_get_bytes(&self, path: &str, extra_header: (&str, &str)) -> Result<Vec<u8>, OpsError> {
+    async fn try_get_bytes(
+        &self,
+        path: &str,
+        extra_header: (&str, &str),
+    ) -> Result<Vec<u8>, OpsError> {
         let token = self
             .tokens
-            .get(&self.http, &self.auth_url, &self.consumer_key, &self.consumer_secret)
+            .get(
+                &self.http,
+                &self.auth_url,
+                &self.consumer_key,
+                &self.consumer_secret,
+            )
             .await?;
 
         let response = self
@@ -183,7 +210,11 @@ impl OpsClient {
             .send()
             .await?;
 
-        if let Some(header) = response.headers().get("X-Throttling-Control").and_then(|v| v.to_str().ok()) {
+        if let Some(header) = response
+            .headers()
+            .get("X-Throttling-Control")
+            .and_then(|v| v.to_str().ok())
+        {
             if let Ok(parsed) = throttle::parse(header) {
                 *self.last_throttle.lock().expect("throttle mutex poisoned") = Some(parsed);
             }
@@ -208,7 +239,9 @@ impl OpsClient {
     async fn wait_for_throttle_clearance(&self) -> Result<(), OpsError> {
         let action_and_delay = {
             let guard = self.last_throttle.lock().expect("throttle mutex poisoned");
-            guard.as_ref().map(|tc| (tc.strictest_action(), tc.recommended_delay()))
+            guard
+                .as_ref()
+                .map(|tc| (tc.strictest_action(), tc.recommended_delay()))
         };
         match action_and_delay {
             Some((Action::Stop, _)) => Err(OpsError::Blocked("black".to_string())),

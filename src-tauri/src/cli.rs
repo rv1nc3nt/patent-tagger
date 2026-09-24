@@ -8,7 +8,10 @@ use core_lib::rusqlite::Connection;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "patent-tagger", about = "Patent Tagger - headless import/export/status")]
+#[command(
+    name = "patent-tagger",
+    about = "Patent Tagger - headless import/export/status"
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -54,7 +57,11 @@ enum ExportFormat {
 /// exit code (SPEC 7.7: "exits with a non-zero code on failure").
 pub fn run(cli: Cli) -> i32 {
     let result = match cli.command {
-        Command::Import { file, fetch_fulltext, fetch_drawings } => run_import(&file, fetch_fulltext, fetch_drawings),
+        Command::Import {
+            file,
+            fetch_fulltext,
+            fetch_drawings,
+        } => run_import(&file, fetch_fulltext, fetch_drawings),
         Command::Export { tag, out, format } => run_export(&tag, &out, format),
         Command::Status => run_status(),
     };
@@ -68,38 +75,61 @@ pub fn run(cli: Cli) -> i32 {
 }
 
 fn tokio_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
-    Ok(tokio::runtime::Builder::new_current_thread().enable_time().build()?)
+    Ok(tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()?)
 }
 
-fn run_import(file: &std::path::Path, fetch_fulltext: bool, fetch_drawings: bool) -> anyhow::Result<()> {
+fn run_import(
+    file: &std::path::Path,
+    fetch_fulltext: bool,
+    fetch_drawings: bool,
+) -> anyhow::Result<()> {
     let db = crate::db::open()?;
     let _lock = crate::lock::PipelineLock::acquire(&db.data_dir)?;
 
     let raw_input = std::fs::read_to_string(file)
         .map_err(|e| anyhow::anyhow!("reading {}: {e}", file.display()))?;
 
-    let creds = crate::platform::credentials::load(&db.data_dir)?
-        .ok_or_else(|| anyhow::anyhow!("no OPS credentials saved yet - set them via the GUI's Settings screen first"))?;
+    let creds = crate::platform::credentials::load(&db.data_dir)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "no OPS credentials saved yet - set them via the GUI's Settings screen first"
+        )
+    })?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
     let embedder = embed_lib::BgeSmallEmbedder::load()?;
 
     let now = current_timestamp();
     let report = {
-        let conn = db.conn.lock().map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+        let conn = db
+            .conn
+            .lock()
+            .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
         crate::commands::import_numbers_into(&conn, &raw_input, &now)?
     };
 
     let rt = tokio_runtime()?;
-    let outcomes = rt.block_on(crate::import_worker::run(&db.conn, &client, &embedder, |_| {}));
+    let outcomes = rt.block_on(crate::import_worker::run(
+        &db.conn,
+        &client,
+        &embedder,
+        |_| {},
+    ));
 
     let automation_summary = {
-        let conn = db.conn.lock().map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+        let conn = db
+            .conn
+            .lock()
+            .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
         crate::automation::apply_full_automation(&conn, &embedder, &now)?
     };
 
     if fetch_fulltext || fetch_drawings {
         let now = current_timestamp();
-        let conn = db.conn.lock().map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+        let conn = db
+            .conn
+            .lock()
+            .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
         for outcome in outcomes.iter().filter(|o| o.status == "fetched") {
             if fetch_fulltext {
                 crate::retrieval_worker::enqueue_fulltext(&conn, outcome.doc_id, &now)?;
@@ -111,10 +141,22 @@ fn run_import(file: &std::path::Path, fetch_fulltext: bool, fetch_drawings: bool
     }
     // Drains both the "per policy" jobs enqueued by validation/auto-
     // completion above and any forced by --fetch-fulltext/--fetch-drawings.
-    rt.block_on(crate::retrieval_worker::run_fulltext(&db.conn, &client, |_| {}));
-    rt.block_on(crate::retrieval_worker::run_drawings(&db.conn, &client, &db.data_dir, |_| {}));
+    rt.block_on(crate::retrieval_worker::run_fulltext(
+        &db.conn,
+        &client,
+        |_| {},
+    ));
+    rt.block_on(crate::retrieval_worker::run_drawings(
+        &db.conn,
+        &client,
+        &db.data_dir,
+        |_| {},
+    ));
 
-    let errors = outcomes.iter().filter(|o| o.status == "error" || o.status == "not_found").count();
+    let errors = outcomes
+        .iter()
+        .filter(|o| o.status == "error" || o.status == "not_found")
+        .count();
     println!(
         "imported: {}, duplicates: {}, unparseable: {}, needs review: {}",
         report.imported.len(),
@@ -137,7 +179,10 @@ fn run_import(file: &std::path::Path, fetch_fulltext: bool, fetch_drawings: bool
 
 fn run_export(tag_name: &str, out: &std::path::Path, format: ExportFormat) -> anyhow::Result<()> {
     let db = crate::db::open()?;
-    let conn = db.conn.lock().map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
 
     let tag = core_lib::tags::list_active(&conn)?
         .into_iter()
@@ -150,7 +195,10 @@ fn run_export(tag_name: &str, out: &std::path::Path, format: ExportFormat) -> an
         ExportFormat::Txt => {
             let rows = core_lib::library::search(
                 &conn,
-                &core_lib::library::LibraryFilters { include_tag_ids: vec![tag.id], ..Default::default() },
+                &core_lib::library::LibraryFilters {
+                    include_tag_ids: vec![tag.id],
+                    ..Default::default()
+                },
             )?;
             let mut exported = 0;
             for row in &rows {
@@ -158,28 +206,49 @@ fn run_export(tag_name: &str, out: &std::path::Path, format: ExportFormat) -> an
                     exported += 1;
                 }
             }
-            println!("exported {exported} document folder(s) to {}", out.display());
+            println!(
+                "exported {exported} document folder(s) to {}",
+                out.display()
+            );
         }
         ExportFormat::Csv => {
             let rows = tagged_export_rows(&conn, tag_name)?;
-            write_export_file(out, &format!("{tag_name}.csv"), &core_lib::export::to_csv(&rows), rows.len())?;
+            write_export_file(
+                out,
+                &format!("{tag_name}.csv"),
+                &core_lib::export::to_csv(&rows),
+                rows.len(),
+            )?;
         }
         ExportFormat::Json => {
             let rows = tagged_export_rows(&conn, tag_name)?;
-            write_export_file(out, &format!("{tag_name}.json"), &serde_json::to_string_pretty(&rows)?, rows.len())?;
+            write_export_file(
+                out,
+                &format!("{tag_name}.json"),
+                &serde_json::to_string_pretty(&rows)?,
+                rows.len(),
+            )?;
         }
     }
     Ok(())
 }
 
-fn tagged_export_rows(conn: &Connection, tag_name: &str) -> anyhow::Result<Vec<core_lib::export::ExportRow>> {
+fn tagged_export_rows(
+    conn: &Connection,
+    tag_name: &str,
+) -> anyhow::Result<Vec<core_lib::export::ExportRow>> {
     Ok(core_lib::export::export_rows(conn)?
         .into_iter()
         .filter(|row| row.tags.iter().any(|t| t == tag_name))
         .collect())
 }
 
-fn write_export_file(out: &std::path::Path, file_name: &str, contents: &str, count: usize) -> anyhow::Result<()> {
+fn write_export_file(
+    out: &std::path::Path,
+    file_name: &str,
+    contents: &str,
+    count: usize,
+) -> anyhow::Result<()> {
     let path = out.join(file_name);
     std::fs::write(&path, contents)?;
     println!("exported {count} document(s) to {}", path.display());
@@ -188,19 +257,30 @@ fn write_export_file(out: &std::path::Path, file_name: &str, contents: &str, cou
 
 fn run_status() -> anyhow::Result<()> {
     let db = crate::db::open()?;
-    let conn = db.conn.lock().map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
 
     println!("data directory: {}", db.data_dir.display());
     println!(
         "OPS credentials: {}",
-        if crate::platform::credentials::load(&db.data_dir)?.is_some() { "configured" } else { "not configured" }
+        if crate::platform::credentials::load(&db.data_dir)?.is_some() {
+            "configured"
+        } else {
+            "not configured"
+        }
     );
 
     for state in ["queued", "validated", "auto_completed", "skipped"] {
         let count = document_count_by_review_state(&conn, state)?;
         println!("documents ({state}): {count}");
     }
-    for kind in ["import_document", "fulltext_retrieval", "drawings_retrieval"] {
+    for kind in [
+        "import_document",
+        "fulltext_retrieval",
+        "drawings_retrieval",
+    ] {
         let pending = core_lib::jobs::list_resumable(&conn, kind)?.len();
         let failed = core_lib::jobs::list_failed(&conn, kind)?.len();
         println!("jobs ({kind}): {pending} pending/running, {failed} failed");

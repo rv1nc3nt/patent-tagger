@@ -52,8 +52,11 @@ fn dataset(n_per_class: usize, seed_offset: u64) -> Vec<(Vec<f32>, bool)> {
 }
 
 fn knn_accuracy(train: &[(Vec<f32>, bool)], test: &[(Vec<f32>, bool)]) -> f32 {
-    let neighbours: Vec<(i64, Vec<f32>)> =
-        train.iter().enumerate().map(|(i, (v, _))| (i as i64, v.clone())).collect();
+    let neighbours: Vec<(i64, Vec<f32>)> = train
+        .iter()
+        .enumerate()
+        .map(|(i, (v, _))| (i as i64, v.clone()))
+        .collect();
     let labels: HashMap<i64, LabelState> = train
         .iter()
         .enumerate()
@@ -72,7 +75,10 @@ fn knn_accuracy(train: &[(Vec<f32>, bool)], test: &[(Vec<f32>, bool)]) -> f32 {
 
 fn lr_accuracy(train: &[(Vec<f32>, bool)], test: &[(Vec<f32>, bool)]) -> f32 {
     let clf = classifier::train(train, classifier::default_l2_lambda()).expect("should train");
-    let correct = test.iter().filter(|(x, y)| (clf.predict(x) >= 0.5) == *y).count();
+    let correct = test
+        .iter()
+        .filter(|(x, y)| (clf.predict(x) >= 0.5) == *y)
+        .count();
     correct as f32 / test.len() as f32
 }
 
@@ -101,7 +107,10 @@ fn logistic_regression_outperforms_knn_once_data_is_sufficient() {
         large_lr > large_knn + 0.1,
         "expected LR to clearly outperform k-NN with sufficient data: lr={large_lr:.2}, knn={large_knn:.2}"
     );
-    assert!(large_lr > 0.9, "LR should be quite accurate with 100 samples/class: {large_lr:.2}");
+    assert!(
+        large_lr > 0.9,
+        "LR should be quite accurate with 100 samples/class: {large_lr:.2}"
+    );
 }
 
 /// SPEC 10's M9 acceptance criterion: "neg_threshold calibration tested on
@@ -115,7 +124,15 @@ fn logistic_regression_outperforms_knn_once_data_is_sufficient() {
 #[test]
 fn neg_threshold_calibration_achieves_target_recall_on_held_out_data() {
     let conn = storage::open_in_memory().expect("in-memory db");
-    let tag_id = tags::create(&conn, "Battery", "About batteries", None, None, "2026-01-01T00:00:00Z").unwrap();
+    let tag_id = tags::create(
+        &conn,
+        "Battery",
+        "About batteries",
+        None,
+        None,
+        "2026-01-01T00:00:00Z",
+    )
+    .unwrap();
     let tag = tags::get(&conn, tag_id).unwrap().unwrap();
 
     let train = dataset(100, 10_000);
@@ -126,12 +143,33 @@ fn neg_threshold_calibration_achieves_target_recall_on_held_out_data() {
     for (i, (x, is_pos)) in calibration.iter().enumerate() {
         let pub_key = format!("EP{i:07}");
         documents::insert_pending(&conn, &pub_key, &pub_key, "2026-01-01T00:00:00Z").unwrap();
-        let doc = documents::find_by_pub_key(&conn, &pub_key).unwrap().unwrap();
-        let score = clf.predict(x);
-        predictions::record(&conn, doc.id, tag_id, "model@v1", score, score >= 0.5, "2026-01-01T00:00:00Z").unwrap();
-        let checked: HashSet<i64> = if *is_pos { [tag_id].into_iter().collect() } else { HashSet::new() };
-        labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &checked, "2026-01-01T00:00:00Z")
+        let doc = documents::find_by_pub_key(&conn, &pub_key)
+            .unwrap()
             .unwrap();
+        let score = clf.predict(x);
+        predictions::record(
+            &conn,
+            doc.id,
+            tag_id,
+            "model@v1",
+            score,
+            score >= 0.5,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
+        let checked: HashSet<i64> = if *is_pos {
+            [tag_id].into_iter().collect()
+        } else {
+            HashSet::new()
+        };
+        labels::validate_document(
+            &conn,
+            doc.id,
+            std::slice::from_ref(&tag),
+            &checked,
+            "2026-01-01T00:00:00Z",
+        )
+        .unwrap();
     }
 
     let target_recall = 0.95;
@@ -140,8 +178,15 @@ fn neg_threshold_calibration_achieves_target_recall_on_held_out_data() {
         .expect("should find a calibratable neg_threshold on well-separated clustered data");
 
     let held_out = dataset(200, 30_000);
-    let positives: Vec<&Vec<f32>> = held_out.iter().filter(|(_, is_pos)| *is_pos).map(|(x, _)| x).collect();
-    let missed = positives.iter().filter(|x| clf.predict(x) < neg_threshold).count();
+    let positives: Vec<&Vec<f32>> = held_out
+        .iter()
+        .filter(|(_, is_pos)| *is_pos)
+        .map(|(x, _)| x)
+        .collect();
+    let missed = positives
+        .iter()
+        .filter(|x| clf.predict(x) < neg_threshold)
+        .count();
     let held_out_recall = 1.0 - (missed as f32 / positives.len() as f32);
 
     println!("neg_threshold={neg_threshold:.2}, held-out recall={held_out_recall:.3}");

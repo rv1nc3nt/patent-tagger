@@ -41,7 +41,12 @@ pub fn export_rows(conn: &Connection) -> Result<Vec<ExportRow>, StorageError> {
         let sources = abstract_source
             .map(|s| vec![format!("abstract {s}")])
             .unwrap_or_default();
-        rows.push(ExportRow { pub_key, title, tags, sources });
+        rows.push(ExportRow {
+            pub_key,
+            title,
+            tags,
+            sources,
+        });
     }
     Ok(rows)
 }
@@ -123,17 +128,41 @@ pub fn document_txt(
         format!(" ({})", detail.kind_codes.join(", "))
     };
     out.push_str(&format!("Publication: {}{kind_codes}\n", detail.pub_key));
-    out.push_str(&format!("Title: {}\n", detail.title.as_deref().unwrap_or("Not available")));
+    out.push_str(&format!(
+        "Title: {}\n",
+        detail.title.as_deref().unwrap_or("Not available")
+    ));
     out.push_str(&format!(
         "Applicants: {}\n",
-        if detail.applicants.is_empty() { "Not available".to_string() } else { detail.applicants.join("; ") }
+        if detail.applicants.is_empty() {
+            "Not available".to_string()
+        } else {
+            detail.applicants.join("; ")
+        }
     ));
     out.push_str(&format!(
         "Publication date: {}\n",
-        detail.publication_date.as_deref().unwrap_or("Not available")
+        detail
+            .publication_date
+            .as_deref()
+            .unwrap_or("Not available")
     ));
-    out.push_str(&format!("CPC: {}\n", if detail.cpc.is_empty() { "Not available".to_string() } else { detail.cpc.join(", ") }));
-    out.push_str(&format!("Tags: {}\n", if tags.is_empty() { "None".to_string() } else { tags.join("; ") }));
+    out.push_str(&format!(
+        "CPC: {}\n",
+        if detail.cpc.is_empty() {
+            "Not available".to_string()
+        } else {
+            detail.cpc.join(", ")
+        }
+    ));
+    out.push_str(&format!(
+        "Tags: {}\n",
+        if tags.is_empty() {
+            "None".to_string()
+        } else {
+            tags.join("; ")
+        }
+    ));
 
     let mut sources = Vec::new();
     if let Some(s) = &detail.abstract_source {
@@ -149,7 +178,14 @@ pub fn document_txt(
             sources.push(format!("drawings {s}"));
         }
     }
-    out.push_str(&format!("Sources: {}\n", if sources.is_empty() { "None".to_string() } else { sources.join("; ") }));
+    out.push_str(&format!(
+        "Sources: {}\n",
+        if sources.is_empty() {
+            "None".to_string()
+        } else {
+            sources.join("; ")
+        }
+    ));
 
     out.push('\n');
     out.push_str("===== ABSTRACT =====\n");
@@ -157,9 +193,17 @@ pub fn document_txt(
     out.push('\n');
 
     out.push_str("===== DESCRIPTION =====\n");
-    out.push_str(&fulltext_part_text(fulltext, |ft| ft.description.as_deref(), "Description"));
+    out.push_str(&fulltext_part_text(
+        fulltext,
+        |ft| ft.description.as_deref(),
+        "Description",
+    ));
     out.push_str("===== CLAIMS =====\n");
-    out.push_str(&fulltext_part_text(fulltext, |ft| ft.claims.as_deref(), "Claims"));
+    out.push_str(&fulltext_part_text(
+        fulltext,
+        |ft| ft.claims.as_deref(),
+        "Claims",
+    ));
 
     out.push_str("===== DRAWINGS =====\n");
     match drawings {
@@ -236,7 +280,9 @@ mod tests {
         let tag = tags::get(&conn, tag_id).unwrap().unwrap();
 
         documents::insert_pending(&conn, "EP1234567", "EP1234567", NOW).unwrap();
-        let doc = documents::find_by_pub_key(&conn, "EP1234567").unwrap().unwrap();
+        let doc = documents::find_by_pub_key(&conn, "EP1234567")
+            .unwrap()
+            .unwrap();
         documents::store_fetched(
             &conn,
             doc.id,
@@ -248,7 +294,14 @@ mod tests {
             },
         )
         .unwrap();
-        labels::validate_document(&conn, doc.id, std::slice::from_ref(&tag), &[tag_id].into_iter().collect::<HashSet<_>>(), NOW).unwrap();
+        labels::validate_document(
+            &conn,
+            doc.id,
+            std::slice::from_ref(&tag),
+            &[tag_id].into_iter().collect::<HashSet<_>>(),
+            NOW,
+        )
+        .unwrap();
 
         let rows = export_rows(&conn).unwrap();
         assert_eq!(rows.len(), 1);
@@ -264,12 +317,30 @@ mod tests {
         let tag = tags::get(&conn, tag_id).unwrap().unwrap();
 
         documents::insert_pending(&conn, "EP1111111", "EP1111111", NOW).unwrap();
-        let yes = documents::find_by_pub_key(&conn, "EP1111111").unwrap().unwrap();
+        let yes = documents::find_by_pub_key(&conn, "EP1111111")
+            .unwrap()
+            .unwrap();
         documents::insert_pending(&conn, "EP2222222", "EP2222222", NOW).unwrap();
-        let no = documents::find_by_pub_key(&conn, "EP2222222").unwrap().unwrap();
+        let no = documents::find_by_pub_key(&conn, "EP2222222")
+            .unwrap()
+            .unwrap();
 
-        labels::validate_document(&conn, yes.id, std::slice::from_ref(&tag), &[tag_id].into_iter().collect::<HashSet<_>>(), NOW).unwrap();
-        labels::validate_document(&conn, no.id, std::slice::from_ref(&tag), &HashSet::new(), NOW).unwrap();
+        labels::validate_document(
+            &conn,
+            yes.id,
+            std::slice::from_ref(&tag),
+            &[tag_id].into_iter().collect::<HashSet<_>>(),
+            NOW,
+        )
+        .unwrap();
+        labels::validate_document(
+            &conn,
+            no.id,
+            std::slice::from_ref(&tag),
+            &HashSet::new(),
+            NOW,
+        )
+        .unwrap();
 
         assert_eq!(pub_keys_for_tag(&conn, tag_id).unwrap(), vec!["EP1111111"]);
     }
@@ -309,11 +380,16 @@ mod tests {
         };
         let drawings = DocumentExportDrawings {
             status: "fetched".to_string(),
-            page_paths: vec!["drawings/001.png".to_string(), "drawings/002.png".to_string()],
+            page_paths: vec![
+                "drawings/001.png".to_string(),
+                "drawings/002.png".to_string(),
+            ],
             source: Some("EP.1234567.A1".to_string()),
         };
         let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
-        assert!(text.contains("Sources: abstract EP.1234567.A1; full text EP.1234567.B1; drawings EP.1234567.A1\n"));
+        assert!(text.contains(
+            "Sources: abstract EP.1234567.A1; full text EP.1234567.B1; drawings EP.1234567.A1\n"
+        ));
         assert!(text.contains("===== DESCRIPTION =====\n[0001] A widget.\n"));
         assert!(text.contains("===== CLAIMS =====\n1. A widget.\n"));
         assert!(text.contains("===== DRAWINGS =====\ndrawings/001.png\ndrawings/002.png\n"));
@@ -329,7 +405,9 @@ mod tests {
             source: Some("EP.1234567.A1".to_string()),
         };
         let text = document_txt(&base_detail(), &[], Some(&fulltext), None);
-        assert!(text.contains("===== DESCRIPTION =====\n[Non-English text, language: DE]\n[0001] Nur Deutsch.\n"));
+        assert!(text.contains(
+            "===== DESCRIPTION =====\n[Non-English text, language: DE]\n[0001] Nur Deutsch.\n"
+        ));
         assert!(text.contains("===== CLAIMS =====\nClaims not available for this publication.\n"));
     }
 
@@ -343,7 +421,9 @@ mod tests {
             id: 1,
             pub_key: "EP1234567".to_string(),
             title: Some("Apparatus for manufacturing green bricks".to_string()),
-            abstract_text: Some("An apparatus for manufacturing green bricks from clay.".to_string()),
+            abstract_text: Some(
+                "An apparatus for manufacturing green bricks from clay.".to_string(),
+            ),
             abstract_source: Some("EP.1234567.A1".to_string()),
             applicants: vec!["ACME Corp".to_string(), "Foo Industries".to_string()],
             publication_date: Some("2020-05-14".to_string()),
@@ -362,7 +442,10 @@ mod tests {
         };
         let drawings = DocumentExportDrawings {
             status: "fetched".to_string(),
-            page_paths: vec!["drawings/001.png".to_string(), "drawings/002.png".to_string()],
+            page_paths: vec![
+                "drawings/001.png".to_string(),
+                "drawings/002.png".to_string(),
+            ],
             source: Some("EP.1234567.A1".to_string()),
         };
 
@@ -383,8 +466,14 @@ mod tests {
 
     #[test]
     fn document_txt_states_not_available_distinctly_from_not_retrieved() {
-        let fulltext = DocumentExportFulltext { status: "not_available".to_string(), ..Default::default() };
-        let drawings = DocumentExportDrawings { status: "not_available".to_string(), ..Default::default() };
+        let fulltext = DocumentExportFulltext {
+            status: "not_available".to_string(),
+            ..Default::default()
+        };
+        let drawings = DocumentExportDrawings {
+            status: "not_available".to_string(),
+            ..Default::default()
+        };
         let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
         assert!(text.contains("===== DESCRIPTION =====\nFull text not available in OPS.\n"));
         assert!(text.contains("===== DRAWINGS =====\nThis publication has no drawings.\n"));

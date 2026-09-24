@@ -48,16 +48,51 @@ pub fn store_fetched(
     non_english_only: bool,
     fetched_at: &str,
 ) -> Result<(), StorageError> {
-    let status = if non_english_only { STATUS_NON_ENGLISH_ONLY } else { STATUS_FETCHED };
-    upsert(conn, doc_id, description, claims, Some(lang), Some(source), status, Some(fetched_at))
+    let status = if non_english_only {
+        STATUS_NON_ENGLISH_ONLY
+    } else {
+        STATUS_FETCHED
+    };
+    upsert(
+        conn,
+        doc_id,
+        description,
+        claims,
+        Some(lang),
+        Some(source),
+        status,
+        Some(fetched_at),
+    )
 }
 
-pub fn store_not_available(conn: &Connection, doc_id: i64, fetched_at: &str) -> Result<(), StorageError> {
-    upsert(conn, doc_id, None, None, None, None, STATUS_NOT_AVAILABLE, Some(fetched_at))
+pub fn store_not_available(
+    conn: &Connection,
+    doc_id: i64,
+    fetched_at: &str,
+) -> Result<(), StorageError> {
+    upsert(
+        conn,
+        doc_id,
+        None,
+        None,
+        None,
+        None,
+        STATUS_NOT_AVAILABLE,
+        Some(fetched_at),
+    )
 }
 
 pub fn store_error(conn: &Connection, doc_id: i64, fetched_at: &str) -> Result<(), StorageError> {
-    upsert(conn, doc_id, None, None, None, None, STATUS_ERROR, Some(fetched_at))
+    upsert(
+        conn,
+        doc_id,
+        None,
+        None,
+        None,
+        None,
+        STATUS_ERROR,
+        Some(fetched_at),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -78,7 +113,15 @@ fn upsert(
             description = excluded.description, claims = excluded.claims,
             lang = excluded.lang, source = excluded.source,
             status = excluded.status, fetched_at = excluded.fetched_at",
-        params![doc_id, description, claims, lang, source, status, fetched_at],
+        params![
+            doc_id,
+            description,
+            claims,
+            lang,
+            source,
+            status,
+            fetched_at
+        ],
     )?;
     Ok(())
 }
@@ -103,7 +146,9 @@ mod tests {
     const NOW: &str = "2026-01-01T00:00:00Z";
 
     fn new_doc(conn: &Connection) -> i64 {
-        documents::insert_pending(conn, "EP1234567", "EP1234567", NOW).unwrap().unwrap()
+        documents::insert_pending(conn, "EP1234567", "EP1234567", NOW)
+            .unwrap()
+            .unwrap()
     }
 
     #[test]
@@ -117,7 +162,17 @@ mod tests {
     fn store_fetched_round_trips_with_one_part_missing() {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
-        store_fetched(&conn, doc_id, None, Some("1. A claim."), "EN", "EP.1234567.B1", false, NOW).unwrap();
+        store_fetched(
+            &conn,
+            doc_id,
+            None,
+            Some("1. A claim."),
+            "EN",
+            "EP.1234567.B1",
+            false,
+            NOW,
+        )
+        .unwrap();
 
         let row = get(&conn, doc_id).unwrap().unwrap();
         assert_eq!(row.status, STATUS_FETCHED);
@@ -131,16 +186,38 @@ mod tests {
     fn store_fetched_non_english_sets_that_status() {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
-        store_fetched(&conn, doc_id, Some("[0001] Nur Deutsch."), None, "DE", "EP.1234567.A1", true, NOW)
-            .unwrap();
-        assert_eq!(get(&conn, doc_id).unwrap().unwrap().status, STATUS_NON_ENGLISH_ONLY);
+        store_fetched(
+            &conn,
+            doc_id,
+            Some("[0001] Nur Deutsch."),
+            None,
+            "DE",
+            "EP.1234567.A1",
+            true,
+            NOW,
+        )
+        .unwrap();
+        assert_eq!(
+            get(&conn, doc_id).unwrap().unwrap().status,
+            STATUS_NON_ENGLISH_ONLY
+        );
     }
 
     #[test]
     fn store_not_available_clears_any_previous_text() {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
-        store_fetched(&conn, doc_id, Some("text"), None, "EN", "EP.1234567.A1", false, NOW).unwrap();
+        store_fetched(
+            &conn,
+            doc_id,
+            Some("text"),
+            None,
+            "EN",
+            "EP.1234567.A1",
+            false,
+            NOW,
+        )
+        .unwrap();
         store_not_available(&conn, doc_id, NOW).unwrap();
 
         let row = get(&conn, doc_id).unwrap().unwrap();
@@ -153,7 +230,17 @@ mod tests {
         let conn = storage::open_in_memory().expect("in-memory db");
         let doc_id = new_doc(&conn);
         store_error(&conn, doc_id, NOW).unwrap();
-        store_fetched(&conn, doc_id, Some("text"), Some("claims"), "EN", "EP.1234567.A1", false, NOW).unwrap();
+        store_fetched(
+            &conn,
+            doc_id,
+            Some("text"),
+            Some("claims"),
+            "EN",
+            "EP.1234567.A1",
+            false,
+            NOW,
+        )
+        .unwrap();
         assert_eq!(get(&conn, doc_id).unwrap().unwrap().status, STATUS_FETCHED);
     }
 
@@ -174,7 +261,11 @@ mod tests {
         .unwrap();
 
         let found: i64 = conn
-            .query_row("SELECT rowid FROM fulltext_fts WHERE fulltext_fts MATCH 'widget'", [], |row| row.get(0))
+            .query_row(
+                "SELECT rowid FROM fulltext_fts WHERE fulltext_fts MATCH 'widget'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(found, doc_id);
     }

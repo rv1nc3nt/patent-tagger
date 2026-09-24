@@ -3,10 +3,10 @@
 //! module allowed to branch on target OS.
 
 pub mod credentials;
-#[cfg(windows)]
-mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(windows)]
+mod windows;
 
 use std::path::{Path, PathBuf};
 
@@ -107,6 +107,9 @@ mod tests {
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755))
             .expect("chmod should succeed");
 
-        assert!(!portable, "a read-only directory must not be treated as portable");
+        assert!(
+            !portable,
+            "a read-only directory must not be treated as portable"
+        );
     }
 }

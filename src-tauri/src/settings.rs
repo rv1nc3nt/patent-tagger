@@ -31,11 +31,14 @@ pub fn get_settings(state: State<Db>) -> Result<SettingsView, String> {
         target_precision: settings::target_precision(&conn).map_err(|e| e.to_string())?,
         target_recall: settings::target_recall(&conn).map_err(|e| e.to_string())?,
         audit_rate: settings::audit_rate(&conn).map_err(|e| e.to_string())?,
-        full_automation_enabled: settings::full_automation_enabled(&conn).map_err(|e| e.to_string())?,
+        full_automation_enabled: settings::full_automation_enabled(&conn)
+            .map_err(|e| e.to_string())?,
         fulltext_policy: settings::fulltext_policy(&conn).map_err(|e| e.to_string())?,
         drawings_policy: settings::drawings_policy(&conn).map_err(|e| e.to_string())?,
-        fulltext_policy_tag_ids: settings::fulltext_policy_tag_ids(&conn).map_err(|e| e.to_string())?,
-        drawings_policy_tag_ids: settings::drawings_policy_tag_ids(&conn).map_err(|e| e.to_string())?,
+        fulltext_policy_tag_ids: settings::fulltext_policy_tag_ids(&conn)
+            .map_err(|e| e.to_string())?,
+        drawings_policy_tag_ids: settings::drawings_policy_tag_ids(&conn)
+            .map_err(|e| e.to_string())?,
     })
 }
 
@@ -47,8 +50,10 @@ pub fn update_settings(state: State<Db>, view: SettingsView) -> Result<(), Strin
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
 
     if view.full_automation_enabled {
-        let any_auto_enabled =
-            tags::list_active(&conn).map_err(|e| e.to_string())?.iter().any(|t| t.auto_enabled);
+        let any_auto_enabled = tags::list_active(&conn)
+            .map_err(|e| e.to_string())?
+            .iter()
+            .any(|t| t.auto_enabled);
         if !any_auto_enabled {
             return Err(
                 "full automation can only be turned on once at least one tag is in automatic mode"
@@ -57,21 +62,42 @@ pub fn update_settings(state: State<Db>, view: SettingsView) -> Result<(), Strin
         }
     }
 
-    settings::set(&conn, settings::TARGET_PRECISION_KEY, &view.target_precision.to_string())
-        .map_err(|e| e.to_string())?;
-    settings::set(&conn, settings::TARGET_RECALL_KEY, &view.target_recall.to_string())
-        .map_err(|e| e.to_string())?;
-    settings::set(&conn, settings::AUDIT_RATE_KEY, &view.audit_rate.to_string()).map_err(|e| e.to_string())?;
+    settings::set(
+        &conn,
+        settings::TARGET_PRECISION_KEY,
+        &view.target_precision.to_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    settings::set(
+        &conn,
+        settings::TARGET_RECALL_KEY,
+        &view.target_recall.to_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    settings::set(
+        &conn,
+        settings::AUDIT_RATE_KEY,
+        &view.audit_rate.to_string(),
+    )
+    .map_err(|e| e.to_string())?;
     settings::set(
         &conn,
         settings::FULL_AUTOMATION_ENABLED_KEY,
-        if view.full_automation_enabled { "true" } else { "false" },
+        if view.full_automation_enabled {
+            "true"
+        } else {
+            "false"
+        },
     )
     .map_err(|e| e.to_string())?;
-    settings::set(&conn, settings::FULLTEXT_POLICY_KEY, &view.fulltext_policy).map_err(|e| e.to_string())?;
-    settings::set(&conn, settings::DRAWINGS_POLICY_KEY, &view.drawings_policy).map_err(|e| e.to_string())?;
-    settings::set_fulltext_policy_tag_ids(&conn, &view.fulltext_policy_tag_ids).map_err(|e| e.to_string())?;
-    settings::set_drawings_policy_tag_ids(&conn, &view.drawings_policy_tag_ids).map_err(|e| e.to_string())?;
+    settings::set(&conn, settings::FULLTEXT_POLICY_KEY, &view.fulltext_policy)
+        .map_err(|e| e.to_string())?;
+    settings::set(&conn, settings::DRAWINGS_POLICY_KEY, &view.drawings_policy)
+        .map_err(|e| e.to_string())?;
+    settings::set_fulltext_policy_tag_ids(&conn, &view.fulltext_policy_tag_ids)
+        .map_err(|e| e.to_string())?;
+    settings::set_drawings_policy_tag_ids(&conn, &view.drawings_policy_tag_ids)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -106,7 +132,11 @@ pub fn export_tag_schema(state: State<Db>, dest_path: String) -> Result<(), Stri
 /// so an existing tag's learned state (threshold, classifier, labels) is
 /// never touched by an import.
 #[tauri::command]
-pub fn import_tag_schema(state: State<Db>, model: State<Model>, src_path: String) -> Result<usize, String> {
+pub fn import_tag_schema(
+    state: State<Db>,
+    model: State<Model>,
+    src_path: String,
+) -> Result<usize, String> {
     use embed_lib::Embedder;
 
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
@@ -132,7 +162,13 @@ pub fn import_tag_schema(state: State<Db>, model: State<Model>, src_path: String
         let text = format!("{}: {}", entry.name, entry.definition);
         if let Ok(mut vectors) = model.0.embed(&[text]) {
             if let Some(vector) = vectors.pop() {
-                let _ = core_lib::embeddings::store_tag_embedding(&conn, tag_id, model.0.model_id(), 1, &vector);
+                let _ = core_lib::embeddings::store_tag_embedding(
+                    &conn,
+                    tag_id,
+                    model.0.model_id(),
+                    1,
+                    &vector,
+                );
             }
         }
         imported += 1;

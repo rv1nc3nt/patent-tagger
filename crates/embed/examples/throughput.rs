@@ -19,7 +19,9 @@ fn main() {
     let batch: Vec<String> = std::iter::repeat_n(text.to_string(), BATCH_SIZE).collect();
 
     // Warm up (first run pays one-time setup costs, e.g. allocator growth).
-    embedder.embed(&batch).expect("warm-up embedding should succeed");
+    embedder
+        .embed(&batch)
+        .expect("warm-up embedding should succeed");
 
     let start = Instant::now();
     for _ in 0..BATCHES {

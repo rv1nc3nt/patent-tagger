@@ -132,9 +132,10 @@ mod tests {
 
     #[test]
     fn parses_token_response_with_string_expires_in() {
-        let token =
-            parse_token_response(r#"{"access_token":"abc123","expires_in":"1199","token_type":"Bearer"}"#)
-                .expect("should parse");
+        let token = parse_token_response(
+            r#"{"access_token":"abc123","expires_in":"1199","token_type":"Bearer"}"#,
+        )
+        .expect("should parse");
         assert_eq!(token.access_token, "abc123");
         assert!(token.is_valid());
     }
