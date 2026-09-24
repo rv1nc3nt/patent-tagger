@@ -362,7 +362,7 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
 - Bulk action: retrieve full text or drawings for the current selection.
 
 **Tags**
-- Create, edit, archive; definition, parent, colour, hotkey.
+- Create, edit, archive, restore (unarchive); definition, parent, colour, hotkey.
 - Statistics per tag; review queue for new tags; automatic-mode toggle with eligibility status.
 
 **Metrics**
