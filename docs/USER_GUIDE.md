@@ -169,7 +169,50 @@ Tick documents to **Retrieve full text for selected** or **Retrieve drawings for
 In **Settings**:
 
 - **Back up now…** writes the database and all drawings to one `.zip` file. **Restore from backup…** replaces your data with a backup's; restart the application afterwards.
-- **Export tags…** saves your tag definitions (names, definitions, parents, colours, hotkeys) as JSON. **Import tags…** adds the tags from such a file, leaving existing tags with the same name unchanged. A hotkey that is reserved or already taken is dropped, and the message says so.
+- **Export tags…** saves your active tags' definitions (names, definitions, parents, colours, hotkeys) as JSON. **Import tags…** adds the tags from such a file. Thresholds, automatic mode and labels are not part of the file; imported tags start from scratch.
+
+### Tag file format
+
+A tag file is a JSON array with one object per tag. You can write one by hand to set up a tag scheme in one go:
+
+```json
+[
+  {
+    "name": "Energy storage",
+    "definition": "Devices or methods that store electrical, chemical or thermal energy for later use.",
+    "color": "#2e7d32",
+    "hotkey": "e"
+  },
+  {
+    "name": "Battery",
+    "definition": "Electrochemical cells and battery packs, including their electrodes, electrolytes and management systems.",
+    "parent": "Energy storage",
+    "color": "#1565c0",
+    "hotkey": "b"
+  },
+  {
+    "name": "Supercapacitor",
+    "definition": "Electric double-layer or pseudo-capacitors used for energy storage.",
+    "parent": "Energy storage"
+  }
+]
+```
+
+| Field | Required | Content |
+|---|---|---|
+| `name` | yes | The tag name. |
+| `definition` | yes | What qualifies for the tag. It drives the first suggestions, so make it concrete. |
+| `parent` | no | The *name* of the parent tag. It can be a tag defined later in the same file or one that already exists. |
+| `color` | no | A CSS colour, e.g. `"#1565c0"`. |
+| `hotkey` | no | A single character for the Review screen. |
+
+Rules applied on import:
+
+- A tag whose name already exists, including an archived one, is skipped, so existing tags and what they have learned are never changed.
+- A hotkey that is reserved (`J`, `K`, `S`, `/`), longer than one character, or already used by an active tag is dropped. The tag is still created without it.
+- A parent that doesn't exist or would create a cycle is ignored, and the tag is placed at the top level.
+- Both cases are listed in the message shown after the import.
+- `name` and `definition` must not be empty. An entry with an empty `name` or `definition` stops the import with an error. Tags earlier in the file will already have been created.
 
 ## 10. Command-line mode
 
