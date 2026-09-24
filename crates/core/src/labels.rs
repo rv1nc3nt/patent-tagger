@@ -212,6 +212,10 @@ pub fn has_any_label(conn: &Connection, doc_id: i64, tag_id: i64) -> Result<bool
     .map_err(StorageError::from)
 }
 
+/// A label's `(state, confidence, model_version)`, as returned by
+/// [`get_label`].
+pub type LabelValue = (LabelState, Option<f32>, Option<String>);
+
 /// The current `(state, confidence, model_version)` of `(doc_id,
 /// tag_id)`'s label, if any - used by full automation (SPEC 7.6) to reuse
 /// an already-decided tag's state/score without re-scoring it.
@@ -219,7 +223,7 @@ pub fn get_label(
     conn: &Connection,
     doc_id: i64,
     tag_id: i64,
-) -> Result<Option<(LabelState, Option<f32>, Option<String>)>, StorageError> {
+) -> Result<Option<LabelValue>, StorageError> {
     conn.query_row(
         "SELECT state, confidence, model_version FROM labels WHERE doc_id = ?1 AND tag_id = ?2",
         params![doc_id, tag_id],

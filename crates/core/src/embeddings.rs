@@ -175,7 +175,7 @@ mod tests {
         labels::validate_document(
             &conn,
             pos_doc.id,
-            &[tag.clone()],
+            std::slice::from_ref(&tag),
             &[tag_id].into_iter().collect::<HashSet<_>>(),
             "2026-01-01T00:00:00Z",
         )
@@ -189,7 +189,7 @@ mod tests {
         labels::validate_document(
             &conn,
             neg_doc.id,
-            &[tag.clone()],
+            std::slice::from_ref(&tag),
             &HashSet::new(),
             "2026-01-01T00:00:00Z",
         )

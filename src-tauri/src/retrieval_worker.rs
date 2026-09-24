@@ -461,13 +461,15 @@ async fn fetch_and_store_page(
     let conn = conn_mutex.lock().expect("db mutex poisoned");
     drawings::insert_page(
         &conn,
-        doc_id,
-        page,
-        source_docdb_id,
-        &relative_path,
-        width as i64,
-        height as i64,
-        now,
+        &drawings::NewDrawingPage {
+            doc_id,
+            page,
+            source: source_docdb_id,
+            path: &relative_path,
+            width: width as i64,
+            height: height as i64,
+            fetched_at: now,
+        },
     )
     .map_err(storage_err)
 }

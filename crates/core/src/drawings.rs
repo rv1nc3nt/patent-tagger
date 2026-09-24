@@ -56,16 +56,30 @@ pub fn list_pages(conn: &Connection, doc_id: i64) -> Result<Vec<DrawingPage>, St
     Ok(rows)
 }
 
-pub fn insert_page(
-    conn: &Connection,
-    doc_id: i64,
-    page: i64,
-    source: &str,
-    path: &str,
-    width: i64,
-    height: i64,
-    fetched_at: &str,
-) -> Result<(), StorageError> {
+/// A page to insert with [`insert_page`]; the borrowed counterpart of
+/// [`DrawingPage`].
+#[derive(Debug, Clone, Copy)]
+pub struct NewDrawingPage<'a> {
+    pub doc_id: i64,
+    pub page: i64,
+    pub source: &'a str,
+    /// Relative to the data directory, e.g. `drawings/EP1234567/001.png`.
+    pub path: &'a str,
+    pub width: i64,
+    pub height: i64,
+    pub fetched_at: &'a str,
+}
+
+pub fn insert_page(conn: &Connection, new: &NewDrawingPage) -> Result<(), StorageError> {
+    let NewDrawingPage {
+        doc_id,
+        page,
+        source,
+        path,
+        width,
+        height,
+        fetched_at,
+    } = *new;
     conn.execute(
         "INSERT INTO drawings (doc_id, page, source, path, width, height, fetched_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
@@ -175,24 +189,28 @@ mod tests {
         store_fetched_status(&conn, doc_id, 2, "EP.1234567.A1", NOW).unwrap();
         insert_page(
             &conn,
-            doc_id,
-            2,
-            "EP.1234567.A1",
-            "drawings/EP1234567/002.png",
-            3508,
-            2479,
-            NOW,
+            &NewDrawingPage {
+                doc_id,
+                page: 2,
+                source: "EP.1234567.A1",
+                path: "drawings/EP1234567/002.png",
+                width: 3508,
+                height: 2479,
+                fetched_at: NOW,
+            },
         )
         .unwrap();
         insert_page(
             &conn,
-            doc_id,
-            1,
-            "EP.1234567.A1",
-            "drawings/EP1234567/001.png",
-            3508,
-            2479,
-            NOW,
+            &NewDrawingPage {
+                doc_id,
+                page: 1,
+                source: "EP.1234567.A1",
+                path: "drawings/EP1234567/001.png",
+                width: 3508,
+                height: 2479,
+                fetched_at: NOW,
+            },
         )
         .unwrap();
 
@@ -237,24 +255,28 @@ mod tests {
         let doc_id = new_doc(&conn);
         insert_page(
             &conn,
-            doc_id,
-            1,
-            "EP.1234567.A1",
-            "drawings/EP1234567/001.png",
-            100,
-            100,
-            NOW,
+            &NewDrawingPage {
+                doc_id,
+                page: 1,
+                source: "EP.1234567.A1",
+                path: "drawings/EP1234567/001.png",
+                width: 100,
+                height: 100,
+                fetched_at: NOW,
+            },
         )
         .unwrap();
         insert_page(
             &conn,
-            doc_id,
-            1,
-            "EP.1234567.A1",
-            "drawings/EP1234567/001.png",
-            3508,
-            2479,
-            NOW,
+            &NewDrawingPage {
+                doc_id,
+                page: 1,
+                source: "EP.1234567.A1",
+                path: "drawings/EP1234567/001.png",
+                width: 3508,
+                height: 2479,
+                fetched_at: NOW,
+            },
         )
         .unwrap();
 
