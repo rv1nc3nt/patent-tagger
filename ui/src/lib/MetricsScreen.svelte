@@ -1,7 +1,5 @@
 <script lang="ts">
   import {
-    disableAutomaticMode,
-    enableAutomaticMode,
     fullAutomationSummary,
     listTags,
     retrainNow,
@@ -25,7 +23,6 @@
   let error = $state("");
   let retraining = $state(false);
   let retrainMessage = $state("");
-  let togglingTagId = $state<number | null>(null);
 
   async function refresh() {
     error = "";
@@ -58,23 +55,6 @@
       error = String(err);
     } finally {
       retraining = false;
-    }
-  }
-
-  async function handleToggleAuto(row: Row) {
-    togglingTagId = row.tag.id;
-    error = "";
-    try {
-      if (row.tag.auto_enabled) {
-        await disableAutomaticMode(row.tag.id);
-      } else {
-        await enableAutomaticMode(row.tag.id);
-      }
-      await refresh();
-    } catch (err) {
-      error = String(err);
-    } finally {
-      togglingTagId = null;
     }
   }
 
@@ -144,18 +124,14 @@
                 Full: P {fmt(row.metrics.full_automation_precision)} / R {fmt(row.metrics.full_automation_recall)} (n={row.metrics.full_automation_n})
               </span>
             </td>
-            <td>
-              <button
-                onclick={() => handleToggleAuto(row)}
-                disabled={togglingTagId === row.tag.id || (!row.tag.auto_enabled && !row.eligibility.eligible)}
-                title={row.eligibility.eligible
-                  ? ""
-                  : `not yet eligible: ${row.eligibility.n_pos}/30 positives, ${row.eligibility.n_evaluated}/150 evaluated`}
-              >
-                {row.tag.auto_enabled ? "Disable" : "Enable"}
-              </button>
-              {#if !row.tag.auto_enabled && !row.eligibility.eligible}
-                <span class="note">not eligible yet</span>
+            <td title="Enable or disable it on the Tags screen">
+              {#if row.tag.auto_enabled}
+                Enabled
+              {:else if row.eligibility.eligible}
+                Eligible
+              {:else}
+                Not eligible yet
+                <span class="note">{row.eligibility.n_pos} positives, {row.eligibility.n_evaluated} evaluated</span>
               {/if}
             </td>
             <td><PrCurveChart points={row.metrics.pr_curve} /></td>

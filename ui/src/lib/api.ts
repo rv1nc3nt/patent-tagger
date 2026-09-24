@@ -49,6 +49,7 @@ export interface TagRow {
   definition: string;
   color: string | null;
   hotkey: string | null;
+  parent_id: number | null;
   version: number;
   archived: boolean;
   threshold: number | null;
@@ -79,6 +80,7 @@ export interface DocumentDetail {
 export interface TagScore {
   tag_id: number;
   name: string;
+  parent_id: number | null;
   color: string | null;
   hotkey: string | null;
   score: number | null;
@@ -154,17 +156,81 @@ export function listTags(): Promise<TagRow[]> {
   return invoke("list_tags");
 }
 
-export function createTag(
-  name: string,
-  definition: string,
-  color: string | null,
-  hotkey: string | null,
-): Promise<TagRow> {
-  return invoke("create_tag", { name, definition, color, hotkey });
+export function listArchivedTags(): Promise<TagRow[]> {
+  return invoke("list_archived_tags");
+}
+
+export interface TagFields {
+  name: string;
+  definition: string;
+  parentId: number | null;
+  color: string | null;
+  hotkey: string | null;
+}
+
+export function createTag(fields: TagFields): Promise<TagRow> {
+  return invoke("create_tag", { ...fields });
+}
+
+export function updateTag(tagId: number, fields: TagFields, bumpVersion: boolean): Promise<TagRow> {
+  return invoke("update_tag", { tagId, ...fields, bumpVersion });
 }
 
 export function archiveTag(tagId: number): Promise<void> {
   return invoke("archive_tag", { tagId });
+}
+
+export interface RestoredTag {
+  tag: TagRow;
+  /// The tag's former hotkey, when another active tag took it meanwhile.
+  hotkey_cleared: string | null;
+}
+
+export function unarchiveTag(tagId: number): Promise<RestoredTag> {
+  return invoke("unarchive_tag", { tagId });
+}
+
+export interface TagStats {
+  tag_id: number;
+  human_pos: number;
+  human_neg: number;
+  auto_pos: number;
+  auto_neg: number;
+  /// Reviewed documents with no label for this tag.
+  unlabelled: number;
+  /// Human labels written under an older tag version.
+  stale: number;
+}
+
+export interface TagOverview {
+  tag: TagRow;
+  stats: TagStats;
+  eligibility: Eligibility;
+}
+
+export function tagOverview(): Promise<TagOverview[]> {
+  return invoke("tag_overview");
+}
+
+export function discardStaleLabels(tagId: number): Promise<number> {
+  return invoke("discard_stale_labels", { tagId });
+}
+
+export interface TagReviewItem {
+  doc_id: number;
+  pub_key: string;
+  title: string | null;
+  previous_state: "pos" | "neg" | null;
+  previous_version: number | null;
+  score: number | null;
+}
+
+export function tagReviewQueue(tagId: number): Promise<TagReviewItem[]> {
+  return invoke("tag_review_queue", { tagId });
+}
+
+export function labelSingleTag(docId: number, tagId: number, positive: boolean): Promise<void> {
+  return invoke("label_single_tag", { docId, tagId, positive });
 }
 
 export type QueueOrdering = "import" | "uncertain";

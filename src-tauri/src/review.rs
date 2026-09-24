@@ -11,6 +11,8 @@ use serde::Serialize;
 pub struct TagScore {
     pub tag_id: i64,
     pub name: String,
+    /// Organisational only: lets the Review screen show tags as a tree.
+    pub parent_id: Option<i64>,
     pub color: Option<String>,
     pub hotkey: Option<String>,
     pub score: Option<f32>,
@@ -127,6 +129,7 @@ pub fn score_document(
         scores.push(TagScore {
             tag_id: tag.id,
             name: tag.name.clone(),
+            parent_id: tag.parent_id,
             color: tag.color.clone(),
             hotkey: tag.hotkey.clone(),
             score,

@@ -12,8 +12,9 @@
     type QueueEntry,
     type QueueOrdering,
   } from "./api";
-  import TagsPanel from "./TagsPanel.svelte";
   import DrawingPage from "./DrawingPage.svelte";
+  import { espacenetUrl } from "./espacenet";
+  import { treeOrder } from "./tagTree";
 
   type DetailTab = "abstract" | "description" | "claims" | "drawings";
 
@@ -62,8 +63,13 @@
     }
   }
 
+  // Tree order while unfiltered; a flat list of matches while filtering.
   const visibleTags = $derived(
-    doc?.tags.filter((t) => t.name.toLowerCase().includes(tagFilter.toLowerCase())) ?? [],
+    tagFilter.trim() === ""
+      ? treeOrder(doc?.tags ?? [], (t) => t.tag_id, (t) => t.parent_id, (t) => t.name)
+      : (doc?.tags ?? [])
+          .filter((t) => t.name.toLowerCase().includes(tagFilter.toLowerCase()))
+          .map((item) => ({ item, depth: 0 })),
   );
 
   export async function refreshQueue() {
@@ -150,15 +156,7 @@
     checked = next;
   }
 
-  function espacenetUrl(d: DocumentView): string | null {
-    const match = d.pub_key.match(/^([A-Za-z]+)(\d+)$/);
-    if (!match) return null;
-    const [, country, number] = match;
-    const kind = d.kind_codes[0] ?? "";
-    return `https://worldwide.espacenet.com/publicationDetails/biblio?CC=${country}&NR=${number}${kind}&KC=${kind}&FT=D`;
-  }
-
-  const espacenetLink = $derived(doc ? espacenetUrl(doc) : null);
+  const espacenetLink = $derived(doc ? espacenetUrl(doc.pub_key, doc.kind_codes) : null);
 
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null;
@@ -200,8 +198,6 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="review">
-  <TagsPanel onchange={refreshQueue} />
-
   {#if error}<p class="error-banner">{error}</p>{/if}
   {#if notice}<p class="notice">{notice}</p>{/if}
 
@@ -324,6 +320,9 @@
 
         <section class="tags-pane">
           <h2>Tags</h2>
+          {#if doc.tags.length === 0}
+            <p class="meta">No tags yet. Create them in the Tags tab.</p>
+          {/if}
           <input
             class="filter"
             placeholder="Filter tags (/)"
@@ -331,8 +330,13 @@
             bind:this={filterInput}
           />
           <ul>
-            {#each visibleTags as tag (tag.tag_id)}
-              <li class:weak={tag.source === "zero_shot"} class:automatic={tag.automatic} class:uncertain={tag.uncertain}>
+            {#each visibleTags as { item: tag, depth } (tag.tag_id)}
+              <li
+                class:weak={tag.source === "zero_shot"}
+                class:automatic={tag.automatic}
+                class:uncertain={tag.uncertain}
+                style:margin-left="{depth}rem"
+              >
                 <label>
                   <input
                     type="checkbox"

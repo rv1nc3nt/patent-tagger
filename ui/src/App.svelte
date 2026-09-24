@@ -4,13 +4,15 @@
   import MetricsScreen from "./lib/MetricsScreen.svelte";
   import ReviewScreen from "./lib/ReviewScreen.svelte";
   import SettingsScreen from "./lib/SettingsScreen.svelte";
+  import TagsScreen from "./lib/TagsScreen.svelte";
 
-  type View = "import" | "review" | "metrics" | "library" | "settings";
+  type View = "import" | "review" | "tags" | "metrics" | "library" | "settings";
   let view = $state<View>("import");
 
   const tabs: { id: View; label: string }[] = [
     { id: "import", label: "Import" },
     { id: "review", label: "Review" },
+    { id: "tags", label: "Tags" },
     { id: "metrics", label: "Metrics" },
     { id: "library", label: "Library" },
     { id: "settings", label: "Settings" },
@@ -28,6 +30,8 @@
     <ImportScreen />
   {:else if view === "review"}
     <ReviewScreen />
+  {:else if view === "tags"}
+    <TagsScreen />
   {:else if view === "metrics"}
     <MetricsScreen />
   {:else if view === "library"}
