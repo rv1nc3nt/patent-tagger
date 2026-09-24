@@ -160,7 +160,7 @@ Exports:
 
 - **Export CSV** and **Export JSON**: every fetched document, with its publication number, title, tags and source publication.
 - **list** (next to a tag): a `.txt` file with the publication numbers carrying that tag.
-- **Export selected…**: one folder per ticked document, holding a `.txt` file with the bibliographic data, tags, sources, abstract, description and claims, plus the drawings as PNG files. Missing parts are stated in the file.
+- **Export selected…**: one folder per tag, holding one folder per ticked document carrying that tag. A document with several tags is copied into each tag's folder; ticked documents without tags go into `_untagged`. Characters not allowed in folder names (such as `/` or `:`) become `_`. Each document folder holds a `.txt` file with the bibliographic data, tags, sources, abstract, description and claims, plus the drawings as PNG files. Missing parts are stated in the file.
 
 Tick documents to **Retrieve full text for selected** or **Retrieve drawings for selected**.
 
@@ -225,7 +225,7 @@ patent-tagger status
 ```
 
 - `import` runs the whole pipeline: fetch, suggest, auto-complete where allowed, queue the rest, and retrieve full text and drawings according to your policies. `--fetch-fulltext` and `--fetch-drawings` retrieve them for every imported document regardless of policy. It prints a summary and exits with a non-zero code if any document failed.
-- `export` writes the documents carrying a tag: one folder per document (`txt`, the default), or a single CSV or JSON file.
+- `export` writes the documents carrying a tag: a folder named after the tag with one folder per document inside (`txt`, the default), or a single CSV or JSON file.
 - `status` prints the data folder, document counts per review state, and pending or failed jobs.
 
 The application can stay open during a scheduled import: you can keep reviewing. Only one import or retrieval runs at a time, so starting another from the window meanwhile reports "pipeline already running".

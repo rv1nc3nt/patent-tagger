@@ -381,12 +381,15 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
 
 **Export**
 - CSV (publication number, title, tags, sources), full JSON, and one `.txt` list of publication numbers per tag.
-- **Document export:** for a selection (or a tag filter), one folder per document:
+- **Document export:** for a selection (or a tag filter), one folder per active tag, holding one folder per document carrying that tag. A document with several tags is copied into each of their folders; a selected document with no tag goes into `_untagged/`. Tag folder names are made safe for Windows and Linux, and kept unique:
 
   ```
-  EP1234567/
-    EP1234567.txt
-    drawings/001.png, 002.png, …
+  Batteries/
+    EP1234567/
+      EP1234567.txt
+      drawings/001.png, 002.png, …
+  _untagged/
+    EP7654321/…
   ```
 
   The `.txt` file is UTF-8 with LF line endings, laid out as follows:

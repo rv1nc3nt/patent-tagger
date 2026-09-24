@@ -51,9 +51,12 @@ pub fn export_tag_list(state: State<Db>, tag_id: i64, dest_path: String) -> Resu
     std::fs::write(&dest_path, pub_keys.join("\n")).map_err(|e| e.to_string())
 }
 
-/// One folder per document under `dest_dir`, each with a `.txt` file in
-/// SPEC section 8's export format and, when retrieved, a `drawings/`
-/// subfolder of PNG pages copied from the data directory.
+/// Document export grouped by tag: one folder per active tag under
+/// `dest_dir` (named by [`export::tag_folder_names`]), each holding the
+/// folder of every selected document carrying that tag. A document with
+/// several tags is copied into each of their folders; one with none goes
+/// into [`export::UNTAGGED_FOLDER`]. Returns the number of documents
+/// exported (not of folders written).
 #[tauri::command]
 pub fn export_documents(
     state: State<Db>,
@@ -62,23 +65,61 @@ pub fn export_documents(
 ) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let dest_dir = std::path::Path::new(&dest_dir);
+    let active_tags = tags::list_active(&conn).map_err(|e| e.to_string())?;
+    let folder_names =
+        export::tag_folder_names(active_tags.iter().map(|t| (t.id, t.name.as_str())));
     let mut exported = 0;
     for doc_id in doc_ids {
-        match export_document_folder(&conn, &state.data_dir, doc_id, dest_dir) {
-            Ok(true) => exported += 1,
-            Ok(false) => {}
-            Err(e) => return Err(e.to_string()),
+        let positive_tag_ids =
+            core_lib::labels::all_positive_tag_ids(&conn, doc_id).map_err(|e| e.to_string())?;
+        let mut tag_dirs: Vec<std::path::PathBuf> = active_tags
+            .iter()
+            .filter(|t| positive_tag_ids.contains(&t.id))
+            .filter_map(|t| folder_names.get(&t.id))
+            .map(|name| dest_dir.join(name))
+            .collect();
+        if tag_dirs.is_empty() {
+            tag_dirs.push(dest_dir.join(export::UNTAGGED_FOLDER));
+        }
+        let mut found = false;
+        for tag_dir in &tag_dirs {
+            found = export_document_folder(&conn, &state.data_dir, doc_id, tag_dir)
+                .map_err(|e| e.to_string())?;
+            if !found {
+                break;
+            }
+        }
+        if found {
+            exported += 1;
         }
     }
     Ok(exported)
 }
 
+/// `tag_id`'s folder for a by-tag export under `dest_dir`. Naming is
+/// shared with [`export_documents`], so the CLI and the GUI put a tag's
+/// documents in the same place.
+pub(crate) fn tag_export_dir(
+    conn: &Connection,
+    tag_id: i64,
+    dest_dir: &std::path::Path,
+) -> anyhow::Result<std::path::PathBuf> {
+    let active_tags = tags::list_active(conn)?;
+    let folder_names =
+        export::tag_folder_names(active_tags.iter().map(|t| (t.id, t.name.as_str())));
+    let name = folder_names
+        .get(&tag_id)
+        .ok_or_else(|| anyhow::anyhow!("tag {tag_id} is not active"))?;
+    Ok(dest_dir.join(name))
+}
+
 /// One document's export folder (SPEC section 8): `<dest_dir>/<pub_key>/`
 /// with the `.txt` file and, when drawings were retrieved, copied PNG
-/// pages. Shared by the [`export_documents`] Tauri command and the CLI's
-/// `export --format txt` (`cli.rs`). Returns `Ok(false)` when `doc_id`
-/// doesn't exist rather than erroring, matching `export_documents`'s
-/// original best-effort behaviour over a batch.
+/// pages. `dest_dir` is the tag folder chosen by the caller: the
+/// [`export_documents`] Tauri command and the CLI's `export --format txt`
+/// (`cli.rs`). Returns `Ok(false)` when `doc_id` doesn't exist rather than
+/// erroring, matching `export_documents`'s original best-effort behaviour
+/// over a batch.
 pub(crate) fn export_document_folder(
     conn: &Connection,
     data_dir: &std::path::Path,

@@ -200,15 +200,16 @@ fn run_export(tag_name: &str, out: &std::path::Path, format: ExportFormat) -> an
                     ..Default::default()
                 },
             )?;
+            let tag_dir = crate::library::tag_export_dir(&conn, tag.id, out)?;
             let mut exported = 0;
             for row in &rows {
-                if crate::library::export_document_folder(&conn, &db.data_dir, row.id, out)? {
+                if crate::library::export_document_folder(&conn, &db.data_dir, row.id, &tag_dir)? {
                     exported += 1;
                 }
             }
             println!(
                 "exported {exported} document folder(s) to {}",
-                out.display()
+                tag_dir.display()
             );
         }
         ExportFormat::Csv => {

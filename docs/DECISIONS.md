@@ -256,3 +256,15 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 **Question:** A tag's zero-shot embedding is computed right after the tag is saved (create, edit, tag-schema import). If that step failed, the tag was saved without an embedding and never got a zero-shot score, and the command reported an error for a save that had succeeded (the Tags form then stayed in "new" mode, so saving again failed with a duplicate name).
 
 **Decision:** `review::score_one_tag` computes and stores the embedding when none exists for the tag's current version and the active model. This also covers a future change of embedding model. If the embedder fails there, the tag has no zero-shot score for that pass, as before, and the next scoring retries. Embedding right after a save is kept as the fast path, but its failure no longer fails the save.
+
+## 2026-09-24 — Document export grouped by tag folders (user-approved)
+
+**Question:** The user asked for the document export to create one folder per tag and copy each document into its tags' folders. SPEC 8 had one flat folder per document.
+
+**Decisions:**
+- **Scope:** "Export selected…" in the Library now writes `<dest>/<tag>/<pub_key>/…`. There is no separate whole-library button.
+- **Flat tag folders:** parents are organisational only, so a child tag's folder is not nested inside its parent's.
+- **Several tags:** the document folder is copied into each tag's folder. Only active tags with a positive label (any source) count, as for the `Tags:` line.
+- **No tag:** selected documents without an active positive tag go into `_untagged/`.
+- **CLI:** `export --tag X --out D --format txt` writes into `D/<X folder>/`, the same layout as the GUI. CSV and JSON exports are unchanged.
+- **Folder names:** `export::sanitize_folder_name` turns Windows-forbidden characters and control characters into `_`, trims trailing dots and spaces, and suffixes reserved device names (`CON`, `COM1`, …) with `_`. Names are unique case-insensitively, also against `_untagged`. On a clash the lower tag id keeps the plain name and later ones get ` (2)`, ` (3)`, and so on.

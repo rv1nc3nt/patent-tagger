@@ -253,11 +253,118 @@ fn fulltext_part_text(
     out
 }
 
+/// Document-export folder for selected documents with no active positive
+/// tag. The leading underscore keeps it apart from tag folders; a tag that
+/// happens to sanitise to the same name is disambiguated instead.
+pub const UNTAGGED_FOLDER: &str = "_untagged";
+
+/// A tag name made safe as a folder name on both Windows and Linux:
+/// characters Windows forbids (`<>:"/\|?*` and control characters) become
+/// `_`, trailing dots and spaces (which Windows strips) are removed, and
+/// reserved device names (`CON`, `COM1`, … also with an extension) get a
+/// trailing `_`. Never empty.
+pub fn sanitize_folder_name(name: &str) -> String {
+    let replaced: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let trimmed = replaced.trim().trim_end_matches(['.', ' ']);
+    if trimmed.is_empty() {
+        return "_".to_string();
+    }
+    let stem = trimmed.split('.').next().unwrap_or(trimmed).trim_end();
+    let reserved = matches!(
+        stem.to_ascii_uppercase().as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+    ) || {
+        let upper = stem.to_ascii_uppercase();
+        (upper.starts_with("COM") || upper.starts_with("LPT"))
+            && upper.len() == 4
+            && upper.as_bytes()[3].is_ascii_digit()
+            && upper.as_bytes()[3] != b'0'
+    };
+    if reserved {
+        format!("{trimmed}_")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// One folder name per tag for the by-tag document export, keyed by tag
+/// id. Names are sanitised with [`sanitize_folder_name`] and are unique
+/// case-insensitively (Windows file names are), also against
+/// [`UNTAGGED_FOLDER`]. On a clash the tag with the lower id keeps the plain
+/// name and later ones get ` (2)`, ` (3)`, …, so names are stable across
+/// exports as long as tags are not renamed.
+pub fn tag_folder_names<'a>(
+    tags: impl IntoIterator<Item = (i64, &'a str)>,
+) -> std::collections::HashMap<i64, String> {
+    let mut tags: Vec<(i64, &str)> = tags.into_iter().collect();
+    tags.sort_by_key(|(id, _)| *id);
+    let mut taken: std::collections::HashSet<String> =
+        std::iter::once(UNTAGGED_FOLDER.to_lowercase()).collect();
+    let mut names = std::collections::HashMap::new();
+    for (id, name) in tags {
+        let base = sanitize_folder_name(name);
+        let mut candidate = base.clone();
+        let mut n = 2;
+        while !taken.insert(candidate.to_lowercase()) {
+            candidate = format!("{base} ({n})");
+            n += 1;
+        }
+        names.insert(id, candidate);
+    }
+    names
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{documents, labels, storage, tags};
     use std::collections::HashSet;
+
+    #[test]
+    fn sanitize_folder_name_replaces_characters_windows_forbids() {
+        assert_eq!(sanitize_folder_name("A/B: C?"), "A_B_ C_");
+        assert_eq!(sanitize_folder_name("x\\y*z|\"<>"), "x_y_z____");
+        assert_eq!(sanitize_folder_name("tab\there"), "tab_here");
+        assert_eq!(sanitize_folder_name("Batteries"), "Batteries");
+        assert_eq!(
+            sanitize_folder_name("Électrodes – solides"),
+            "Électrodes – solides"
+        );
+    }
+
+    #[test]
+    fn sanitize_folder_name_trims_trailing_dots_and_spaces_and_is_never_empty() {
+        assert_eq!(sanitize_folder_name("  name. . "), "name");
+        assert_eq!(sanitize_folder_name(".."), "_");
+        assert_eq!(sanitize_folder_name("   "), "_");
+    }
+
+    #[test]
+    fn sanitize_folder_name_suffixes_reserved_device_names() {
+        assert_eq!(sanitize_folder_name("con"), "con_");
+        assert_eq!(sanitize_folder_name("COM1"), "COM1_");
+        assert_eq!(sanitize_folder_name("lpt9.txt"), "lpt9.txt_");
+        assert_eq!(sanitize_folder_name("COM0"), "COM0");
+        assert_eq!(sanitize_folder_name("CONSOLE"), "CONSOLE");
+    }
+
+    #[test]
+    fn tag_folder_names_disambiguate_case_insensitive_clashes_by_id() {
+        let names = tag_folder_names([(3, "a/b"), (1, "A_B"), (2, "_Untagged"), (4, "other")]);
+        assert_eq!(names[&1], "A_B");
+        assert_eq!(names[&2], "_Untagged (2)");
+        assert_eq!(names[&3], "a_b (2)");
+        assert_eq!(names[&4], "other");
+    }
 
     const NOW: &str = "2026-01-01T00:00:00Z";
 
