@@ -1,6 +1,6 @@
 # Patent Tagger
 
-Desktop application for importing, tagging and exporting patents via EPO Open Patent Services. See `docs/SPEC.md` for the full specification.
+Desktop application for importing, tagging and exporting patents via EPO Open Patent Services. See `docs/USER_GUIDE.md` for how to use it, and `docs/SPEC.md` for the full specification.
 
 ## Development
 
