@@ -268,3 +268,17 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - **No tag:** selected documents without an active positive tag go into `_untagged/`.
 - **CLI:** `export --tag X --out D --format txt` writes into `D/<X folder>/`, the same layout as the GUI. CSV and JSON exports are unchanged.
 - **Folder names:** `export::sanitize_folder_name` turns Windows-forbidden characters and control characters into `_`, trims trailing dots and spaces, and suffixes reserved device names (`CON`, `COM1`, …) with `_`. Names are unique case-insensitively, also against `_untagged`. On a clash the lower tag id keeps the plain name and later ones get ` (2)`, ` (3)`, and so on.
+
+## 2026-09-24 — Import by applicant through saved OPS searches (user-approved)
+
+**Question:** The user asked to import patents by applicant instead of by number, in batches of 100 on demand. SPEC 11 had OPS searches (CQL) out of scope.
+
+**Decisions (SPEC 5.6, 7.7, 8 and 11 updated):**
+- **Where:** the Import screen and the command line (`search add|list|delete|restart`, `import --search <name>`). Searches are saved by name, with their position, so each batch and each scheduled run continues where the last one stopped.
+- **Fields:** applicant, required, with name variants separated by `;` and combined with `or`. Country and a range of publication years are optional. Every field only narrows the query, which matters because of the 2,000-result cap.
+- **Batch:** exactly one page of 100 results (one search request) per "fetch next", importing whatever is new in it. It does not keep reading until 100 new documents are found.
+- **Family:** the DOCDB family id that OPS returns with each result. It costs no extra request, unlike the INPADOC extended family (any shared priority). A family already in the database, whether imported from a search or from a list, is skipped.
+- **Member kept:** within a page, a family's earliest publication with an English abstract, or its earliest publication when none has one. `search/biblio` returns abstracts and dates with the results, so choosing needs no extra request.
+- **Pipeline:** the chosen publications are imported like a pasted list, with the family id stored at insert so the next page already sees the family. Their biblio is fetched again by the normal import job. Reusing the search response would save those requests, but would need a second code path through the selection cascade (SPEC 5.3), so it is left as a possible optimisation.
+- **Start over:** an exhausted search can be restarted from result 1, to pick up new publications. Families already imported are skipped again.
+

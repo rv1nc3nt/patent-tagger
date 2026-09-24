@@ -129,6 +129,14 @@ classifiers(tag_id, model_id, weights BLOB, bias REAL, n_pos INTEGER, n_neg INTE
 
 jobs(id, kind TEXT, payload TEXT, state TEXT, attempts INTEGER, last_error TEXT, updated_at TEXT)
 settings(key TEXT PRIMARY KEY, value TEXT)
+
+saved_searches(                         -- section 5.6
+  id, name TEXT UNIQUE, applicant TEXT, country TEXT, year_from INTEGER, year_to INTEGER,
+  query TEXT,                           -- generated CQL
+  total_results INTEGER,                -- NULL until the first batch
+  next_start INTEGER,                   -- 1-based position of the next batch
+  imported INTEGER, created_at TEXT, last_run_at TEXT
+)
 ```
 
 Vectors are stored as little-endian `f32` BLOBs, L2-normalised. `model_id` identifies the model and the hash of its weights, e.g. `bge-small-en-v1.5-f16@<sha256-prefix>`.
@@ -231,6 +239,15 @@ Defaults: full text after tagging for all documents; drawings on demand. Drawing
 - drawing inquiry and a Group 4 TIFF page, with the decoded PNG compared against a reference image;
 - a publication without drawings.
 
+### 5.6 Search by applicant
+
+Besides a list of numbers, documents can be imported from a **saved search** run against OPS (`published-data/search/biblio`, CQL).
+
+- **Fields:** applicant (required; several name variants separated by `;` are combined with `or`), and optionally a publication country and a range of publication years. The application builds the CQL query from these fields, e.g. `(pa="Siemens" or pa="Siemens Healthineers") and pn=EP and pd within "2020 2024"`, and shows it. Searches are saved by name and cannot be edited; the user deletes one and creates another.
+- **Batches:** each "fetch next" reads exactly one page of 100 results (one search request) and continues from where the previous batch stopped. The saved search records the total result count, the next position and how many documents it imported. OPS returns at most the first 2,000 results of a query; beyond that the search is exhausted and the user is told to narrow it. An exhausted search can be started over, since new publications may have appeared.
+- **One document per family:** results are grouped by DOCDB family id, as returned with each result (no extra request). A family already present in the database is skipped. Otherwise the family's **earliest publication with an English abstract** in the page is imported, or its earliest publication when none has one. A family whose members span two pages is decided by the first page.
+- **Import:** the chosen publications enter the normal pipeline (5.2 onwards) with their family id already recorded. The batch report adds results scanned, families skipped as already present, and documents imported.
+
 ## 6. Embedding model (`crates/embed`)
 
 - **Model:** `BAAI/bge-small-en-v1.5` (MIT licence), BERT architecture via `candle-transformers`, CPU backend.
@@ -328,10 +345,16 @@ The same binary accepts subcommands and then runs without opening a window, so t
 
 ```
 patent-tagger import <file> [--fetch-fulltext] [--fetch-drawings]
+patent-tagger import --search <name> [--fetch-fulltext] [--fetch-drawings]
+patent-tagger search add <name> --applicant <names> [--country <cc>] [--from <year>] [--to <year>]
+patent-tagger search list
+patent-tagger search delete <name>
+patent-tagger search restart <name>
 patent-tagger export --tag <name> --out <folder> [--format txt|csv|json]
 patent-tagger status
 ```
 
+- `import --search` fetches the next batch of 100 results of a saved search (section 5.6), then runs the same pipeline. Each scheduled run continues where the previous one stopped.
 - `import` runs the whole pipeline: fetch, embed, score, auto-complete where allowed, queue the rest, and retrieve full text and drawings per policy. It then prints a summary (imported, auto-completed, queued, errors) and exits with a non-zero code on failure.
 - On Windows the release binary uses the GUI subsystem, so command-line mode must attach to the parent console (`AttachConsole(ATTACH_PARENT_PROCESS)` via `windows-sys`) to print output.
 - A lock file in the data directory prevents two import pipelines from running at once, whether from the GUI or the command line. The database uses WAL mode with a busy timeout, so the GUI stays usable while a scheduled import runs.
@@ -342,6 +365,7 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
 
 **Import**
 - Paste box and file picker; import-job progress.
+- Search by applicant (section 5.6): the search fields with the generated query, and the saved searches, each with its progress (results scanned out of total, documents imported) and "Fetch next 100", "Start over" and "Delete" actions.
 - Report with sections: imported, duplicates, related documents (same application or family), not found, no English abstract, errors.
 - Retry button for failed entries.
 
@@ -465,4 +489,4 @@ Implement in order. Each milestone ends with passing tests, `cargo fmt`, and `ca
 
 ## 11. Out of scope
 
-macOS; Linux distributions other than Ubuntu LTS (they may work, but are not tested); ARM builds; multi-user operation or synchronisation; PDF processing; OCR of drawings; machine translation of non-English full text; use of full text or drawings for tagging (a possible later extension, e.g. embedding the first claim); non-English abstracts beyond the fallback in section 5.3; GPU inference; cloud services other than EPO OPS; OPS searches (CQL) and legal-status retrieval (possible later extensions).
+macOS; Linux distributions other than Ubuntu LTS (they may work, but are not tested); ARM builds; multi-user operation or synchronisation; PDF processing; OCR of drawings; machine translation of non-English full text; use of full text or drawings for tagging (a possible later extension, e.g. embedding the first claim); non-English abstracts beyond the fallback in section 5.3; GPU inference; cloud services other than EPO OPS; OPS searches (CQL) other than the applicant search of section 5.6; legal-status retrieval (a possible later extension).
