@@ -4,12 +4,27 @@ Desktop application for importing, tagging and exporting patents via EPO Open Pa
 
 ## Development
 
+### Prerequisites
+
+- Rust (stable) and the Tauri CLI: `cargo install tauri-cli --version "^2"`
+- Node.js and npm (frontend, `ui/`)
+- Ubuntu: the Tauri 2 system libraries
+
+  ```
+  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libdbus-1-dev \
+    libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev \
+    build-essential pkg-config
+  ```
+
+- Windows: Microsoft C++ Build Tools (MSVC) and WebView2 (preinstalled on Windows 10/11)
+
+### Run
+
 ```
+npm --prefix ui install                        # once: frontend dependencies
 cargo xtask fetch-model                        # once: download + convert the embedding model
 cargo tauri dev
 ```
-
-Requires Node.js (frontend, `ui/`) and, on Linux, the Tauri 2 build prerequisites (WebKitGTK 4.1, GTK 3 and related development packages — see `.github/workflows/ci.yml` for the exact list).
 
 ### Embedding model (`crates/embed`)
 
