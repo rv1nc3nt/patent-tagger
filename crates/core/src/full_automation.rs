@@ -183,6 +183,7 @@ mod tests {
             id: 1,
             name: "Battery".to_string(),
             definition: "About batteries".to_string(),
+            parent_id: None,
             color: None,
             hotkey: None,
             version: 1,

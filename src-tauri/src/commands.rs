@@ -5,7 +5,6 @@ use crate::model::Model;
 use core_lib::rusqlite::Connection;
 use core_lib::tags::TagRow;
 use core_lib::{documents, jobs, labels, number, tags};
-use embed_lib::Embedder;
 use serde::Serialize;
 use std::collections::HashSet;
 use tauri::State;
@@ -148,57 +147,6 @@ pub(crate) fn import_numbers_into(
     }
 
     Ok(report)
-}
-
-#[tauri::command]
-pub fn list_tags(state: State<Db>) -> Result<Vec<TagRow>, String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    tags::list_active(&conn).map_err(|e| e.to_string())
-}
-
-/// Creates a tag and computes its `"{name}: {definition}"` embedding
-/// immediately (SPEC 7.2), so zero-shot scoring never has to fall back to
-/// computing it lazily during review.
-#[tauri::command]
-pub fn create_tag(
-    state: State<Db>,
-    model: State<Model>,
-    name: String,
-    definition: String,
-    color: Option<String>,
-    hotkey: Option<String>,
-) -> Result<TagRow, String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let now = current_timestamp();
-    let id = tags::create(
-        &conn,
-        &name,
-        &definition,
-        color.as_deref(),
-        hotkey.as_deref(),
-        &now,
-    )
-    .map_err(|e| e.to_string())?;
-
-    let text = format!("{name}: {definition}");
-    let vector = model
-        .0
-        .embed(&[text])
-        .map_err(|e| e.to_string())?
-        .pop()
-        .ok_or("embedder returned no vector")?;
-    core_lib::embeddings::store_tag_embedding(&conn, id, model.0.model_id(), 1, &vector)
-        .map_err(|e| e.to_string())?;
-
-    tags::get(&conn, id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "tag vanished immediately after creation".to_string())
-}
-
-#[tauri::command]
-pub fn archive_tag(state: State<Db>, tag_id: i64) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    tags::archive(&conn, tag_id).map_err(|e| e.to_string())
 }
 
 /// SPEC 7.5: "Automatic mode unavailable before eligibility" - refuses

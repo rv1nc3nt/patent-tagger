@@ -269,6 +269,19 @@ pub fn all_positive_tag_ids(conn: &Connection, doc_id: i64) -> Result<HashSet<i6
     Ok(rows)
 }
 
+/// SPEC 7.1: discards `tag`'s human labels written under an older tag
+/// version, so they stop being used for training. Their documents become
+/// unknown for the tag and reappear in its per-tag review queue.
+/// `label_history` keeps the discarded labels. Returns how many were
+/// discarded.
+pub fn discard_stale(conn: &Connection, tag: &TagRow) -> Result<usize, StorageError> {
+    let n = conn.execute(
+        "DELETE FROM labels WHERE tag_id = ?1 AND source = 'human' AND tag_version < ?2",
+        params![tag.id, tag.version],
+    )?;
+    Ok(n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,5 +541,47 @@ mod tests {
             )
             .unwrap();
         assert_eq!(state, "neg", "the human's neg decision must survive");
+    }
+
+    #[test]
+    fn discard_stale_removes_only_older_human_labels() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+        let checked: HashSet<i64> = [battery.id].into_iter().collect();
+        validate_document(
+            &conn,
+            doc_id,
+            &[battery.clone(), solar.clone()],
+            &checked,
+            NOW,
+        )
+        .unwrap();
+
+        let battery = tags::update(
+            &conn,
+            battery.id,
+            tags::TagFields {
+                name: "Battery",
+                definition: "About rechargeable batteries",
+                parent_id: None,
+                color: None,
+                hotkey: None,
+            },
+            true,
+        )
+        .unwrap()
+        .tag;
+
+        assert_eq!(discard_stale(&conn, &battery).unwrap(), 1);
+        assert_eq!(get_label(&conn, doc_id, battery.id).unwrap(), None);
+        assert!(get_label(&conn, doc_id, solar.id).unwrap().is_some());
+        let history: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM label_history WHERE tag_id = ?1",
+                params![battery.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(history, 1);
     }
 }

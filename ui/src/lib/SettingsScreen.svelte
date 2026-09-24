@@ -104,8 +104,15 @@
     error = "";
     status = "";
     try {
-      const count = await importTagSchema(path);
+      const result = await importTagSchema(path);
+      const count = result.created.length;
       status = `Imported ${count} new tag${count === 1 ? "" : "s"} (existing tags were left untouched).`;
+      if (result.hotkeys_dropped.length > 0) {
+        status += ` Hotkey dropped (reserved or already in use): ${result.hotkeys_dropped.join(", ")}.`;
+      }
+      if (result.parents_dropped.length > 0) {
+        status += ` Parent not found, left at top level: ${result.parents_dropped.join(", ")}.`;
+      }
     } catch (err) {
       error = String(err);
     } finally {

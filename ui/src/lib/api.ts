@@ -286,7 +286,13 @@ export function exportTagSchema(destPath: string): Promise<void> {
   return invoke("export_tag_schema", { destPath });
 }
 
-export function importTagSchema(srcPath: string): Promise<number> {
+export interface SchemaImport {
+  created: number[];
+  hotkeys_dropped: string[];
+  parents_dropped: string[];
+}
+
+export function importTagSchema(srcPath: string): Promise<SchemaImport> {
   return invoke("import_tag_schema", { srcPath });
 }
 

@@ -12,6 +12,7 @@ mod retrain;
 mod retrieval_worker;
 mod review;
 mod settings;
+mod tag_screen;
 
 use tauri::Manager;
 
@@ -33,9 +34,14 @@ pub fn run() {
             commands::test_ops_connection,
             commands::run_import_jobs,
             commands::retry_document,
-            commands::list_tags,
-            commands::create_tag,
-            commands::archive_tag,
+            tag_screen::list_tags,
+            tag_screen::list_archived_tags,
+            tag_screen::tag_overview,
+            tag_screen::create_tag,
+            tag_screen::update_tag,
+            tag_screen::archive_tag,
+            tag_screen::unarchive_tag,
+            tag_screen::discard_stale_labels,
             commands::review_queue,
             commands::document_detail,
             commands::validate_document,

@@ -128,50 +128,24 @@ pub fn export_tag_schema(state: State<Db>, dest_path: String) -> Result<(), Stri
     std::fs::write(&dest_path, json).map_err(|e| e.to_string())
 }
 
-/// Add-only (SPEC section 8): tags whose name already exists are skipped,
-/// so an existing tag's learned state (threshold, classifier, labels) is
-/// never touched by an import.
+/// Add-only (SPEC section 8): see `tags::import_schema`. Each created tag
+/// gets its zero-shot embedding immediately, as in `create_tag`.
 #[tauri::command]
 pub fn import_tag_schema(
     state: State<Db>,
     model: State<Model>,
     src_path: String,
-) -> Result<usize, String> {
-    use embed_lib::Embedder;
-
+) -> Result<tags::SchemaImport, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let json = std::fs::read_to_string(&src_path).map_err(|e| e.to_string())?;
     let schema: Vec<tags::TagSchema> = serde_json::from_str(&json).map_err(|e| e.to_string())?;
 
     let now = crate::commands::current_timestamp();
-    let mut imported = 0;
-    for entry in schema {
-        if tags::exists_by_name(&conn, &entry.name).map_err(|e| e.to_string())? {
-            continue;
+    let outcome = tags::import_schema(&conn, &schema, &now).map_err(|e| e.to_string())?;
+    for &tag_id in &outcome.created {
+        if let Some(tag) = tags::get(&conn, tag_id).map_err(|e| e.to_string())? {
+            crate::tag_screen::embed_tag(&conn, &model.0, &tag).map_err(|e| e.to_string())?;
         }
-        let tag_id = tags::create(
-            &conn,
-            &entry.name,
-            &entry.definition,
-            entry.color.as_deref(),
-            entry.hotkey.as_deref(),
-            &now,
-        )
-        .map_err(|e| e.to_string())?;
-
-        let text = format!("{}: {}", entry.name, entry.definition);
-        if let Ok(mut vectors) = model.0.embed(&[text]) {
-            if let Some(vector) = vectors.pop() {
-                let _ = core_lib::embeddings::store_tag_embedding(
-                    &conn,
-                    tag_id,
-                    model.0.model_id(),
-                    1,
-                    &vector,
-                );
-            }
-        }
-        imported += 1;
     }
-    Ok(imported)
+    Ok(outcome)
 }
