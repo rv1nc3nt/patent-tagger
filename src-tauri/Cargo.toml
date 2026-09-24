@@ -30,3 +30,10 @@ patent-embed = { version = "0.1.0", path = "../crates/embed" }
 tauri-plugin-opener = "2.5.5"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tempfile = "3.27.0"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1.53.1", features = ["rt", "time", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+# SPEC 7.7: "the release binary uses the GUI subsystem, so command-line
+# mode must attach to the parent console (AttachConsole via windows-sys)."
+windows-sys = { version = "0.60", features = ["Win32_System_Console"] }

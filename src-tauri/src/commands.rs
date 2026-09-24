@@ -65,6 +65,9 @@ pub async fn run_import_jobs(
 ) -> Result<Vec<crate::import_worker::DocumentOutcome>, String> {
     use tauri::Emitter;
 
+    // SPEC 7.7: refuse to run alongside a scheduled command-line import.
+    // Every command that drains the job queue takes the same lock.
+    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
@@ -110,9 +113,10 @@ fn job_payload_doc_id(payload: &str) -> Option<i64> {
 /// Parses pasted/uploaded input (one number per line, SPEC 5.1), skips
 /// duplicates already in the database, and enqueues an `import_document`
 /// job per new document. Fetching from OPS happens in the background
-/// worker that drains those jobs, not here. Kept free of Tauri types so it's
-/// directly unit-testable against an in-memory database.
-fn import_numbers_into(
+/// worker that drains those jobs, not here. Kept free of Tauri types so
+/// it's directly unit-testable against an in-memory database, and
+/// `pub(crate)` so the CLI's `import` subcommand (`cli.rs`) can reuse it.
+pub(crate) fn import_numbers_into(
     conn: &Connection,
     raw_input: &str,
     now: &str,
@@ -384,6 +388,7 @@ pub(crate) fn enqueue_retrieval_after_tagging(
 /// imports (SPEC 5.4): callers run `run_import_jobs` first.
 #[tauri::command]
 pub async fn run_retrieval_jobs(state: State<'_, Db>) -> Result<(), String> {
+    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
@@ -397,6 +402,7 @@ pub async fn run_retrieval_jobs(state: State<'_, Db>) -> Result<(), String> {
 /// (SPEC section 8), for the "on demand" retrieval policy.
 #[tauri::command]
 pub async fn retrieve_fulltext_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
+    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
         crate::retrieval_worker::enqueue_fulltext(&conn, doc_id, &current_timestamp())
@@ -412,6 +418,7 @@ pub async fn retrieve_fulltext_now(state: State<'_, Db>, doc_id: i64) -> Result<
 
 #[tauri::command]
 pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
+    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
         crate::retrieval_worker::enqueue_drawings(&conn, doc_id, &current_timestamp())

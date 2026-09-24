@@ -1,9 +1,11 @@
 mod automation;
 mod backup;
+pub mod cli;
 mod commands;
 mod db;
 mod import_worker;
 mod library;
+mod lock;
 mod model;
 mod platform;
 mod retrain;
@@ -12,6 +14,12 @@ mod review;
 mod settings;
 
 use tauri::Manager;
+
+// SPEC 7.7: `main.rs` (a separate, external crate from `app_lib`'s own
+// perspective) needs this before entering CLI mode, without exposing the
+// rest of `platform`'s internals (credentials, data-dir resolution) at
+// the crate root.
+pub use platform::attach_parent_console;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

@@ -42,6 +42,20 @@ fn default_data_dir() -> anyhow::Result<PathBuf> {
     linux::default_data_dir()
 }
 
+/// SPEC 7.7: "on Windows the release binary uses the GUI subsystem, so
+/// command-line mode must attach to the parent console...to print
+/// output." A no-op on Linux, where the release binary is a normal
+/// console-attached process already. Written against the documented
+/// `AttachConsole` API but unverified on a real Windows build (no
+/// Windows target available in this sandbox - see docs/DECISIONS.md).
+#[cfg(windows)]
+pub fn attach_parent_console() {
+    windows::attach_parent_console();
+}
+
+#[cfg(not(windows))]
+pub fn attach_parent_console() {}
+
 /// True when `dir` contains a `portable.flag` file and is itself writable.
 /// Pure with respect to its argument, so it's testable without touching the
 /// real executable path or environment.
