@@ -216,3 +216,18 @@ No new "was this document audit-sampled" tracking was needed: SPEC 7.6 itself sa
 ## 2026-09-23 — Known gap: OPS quota usage not shown on the Metrics screen
 
 SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of the Metrics screen, alongside the full-automation readiness/counts M9 just built. `OpsClient` currently parses and acts on the *throttling* header (`X-Throttling-Control`, section 5.4's colour-coded rate limiting) but never captures or exposes the separate quota-usage headers (`X-IndividualQuotaPerHour-Used`, `X-RegisteredQuotaPerWeek-Used`, mentioned in the M2 endpoint-verification entry above) anywhere queryable by the UI. Left out of M9's scope (not part of its stated acceptance criteria) - flagged here rather than silently dropped; picking it up means threading quota headers from `OpsClient` through to a small persisted/queryable state (they're per-key-account figures the server reports, not something the app computes itself).
+
+## 2026-09-24 — M9 command-line mode: `clap` and a direct `tokio` dependency approved
+
+**Question:** SPEC 7.7's subcommands need argument parsing, and the CLI has to drive the async import/retrieval workers without Tauri's event loop. Neither `clap` nor `tokio` is named in the SPEC.
+
+**Decision (user-approved):** `clap` 4 (derive) parses `import`/`export`/`status`. It is pure Rust and gives `--help`, errors and `--format` value checking. `tokio` (`rt`, `time`, `sync`) is a direct dependency of `src-tauri` for a current-thread runtime. It was already in the tree through Tauri and reqwest. `windows-sys` (named in SPEC 7.7) is a Windows-only dependency for `AttachConsole(ATTACH_PARENT_PROCESS)`.
+
+## 2026-09-24 — M9 command-line mode: dispatch, lock and busy timeout
+
+**Decisions:**
+- `main.rs` enters CLI mode whenever the process has any argument beyond the binary name. A normal launch with no arguments opens the GUI.
+- `--fetch-fulltext`/`--fetch-drawings` force retrieval for every document fetched by that run, on top of the configured policy. The run then drains all pending retrieval jobs, both the forced ones and those enqueued by policy.
+- The lock (`src-tauri/src/lock.rs`) is `import.lock` in the data directory, created atomically with `create_new` and deleted on drop. This is portable and needs no new crate. A lock left by a crashed process must be deleted by hand; the error message says so. Every GUI command that drains the job queue takes the same lock: `run_import_jobs`, `run_retrieval_jobs`, `retrieve_*_now` and the Library's bulk retrieval. This stops the GUI and a scheduled import from processing the same pending jobs twice. While a scheduled import runs, those GUI commands return a "pipeline already running" error. Reading, reviewing and labelling are not blocked.
+- `storage::open` sets a 5 s SQLite busy timeout in addition to WAL mode, so the GUI and a CLI process wait for each other's short write transactions instead of failing with `SQLITE_BUSY`.
+- **Not yet verified on Windows:** `AttachConsole` is written against the documented API, but no Windows target was available. Headless mode was smoke-tested on Linux only, with no display set: `status`, the export error paths, lock contention and missing credentials. The Windows CI job and a real Task Scheduler run still need to confirm M9's "headless on both platforms" criterion.
