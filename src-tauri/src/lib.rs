@@ -42,6 +42,8 @@ pub fn run() {
             tag_screen::archive_tag,
             tag_screen::unarchive_tag,
             tag_screen::discard_stale_labels,
+            tag_screen::tag_review_queue,
+            tag_screen::label_single_tag,
             commands::review_queue,
             commands::document_detail,
             commands::validate_document,

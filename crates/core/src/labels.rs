@@ -40,24 +40,40 @@ pub fn validate_document(
         } else {
             LabelState::Neg
         };
-        conn.execute(
-            "INSERT INTO labels (doc_id, tag_id, state, source, tag_version, created_at)
-             VALUES (?1, ?2, ?3, 'human', ?4, ?5)
-             ON CONFLICT (doc_id, tag_id) DO UPDATE SET
-                state = excluded.state, source = excluded.source,
-                tag_version = excluded.tag_version, created_at = excluded.created_at",
-            params![doc_id, tag.id, state.as_str(), tag.version, now],
-        )?;
-        conn.execute(
-            "INSERT INTO label_history (doc_id, tag_id, state, source, tag_version, created_at)
-             VALUES (?1, ?2, ?3, 'human', ?4, ?5)",
-            params![doc_id, tag.id, state.as_str(), tag.version, now],
-        )?;
+        write_human_label(conn, doc_id, tag, state, now)?;
     }
 
     conn.execute(
         "UPDATE documents SET review_state = 'validated', validated_at = ?1 WHERE id = ?2",
         params![now, doc_id],
+    )?;
+    Ok(())
+}
+
+/// Writes one human label under the tag's current version, and appends it
+/// to `label_history`. Leaves the document's `review_state` alone, so the
+/// Tags screen's per-tag review (SPEC 7.1) can label an already-reviewed
+/// document for a single tag.
+pub fn write_human_label(
+    conn: &Connection,
+    doc_id: i64,
+    tag: &TagRow,
+    state: LabelState,
+    now: &str,
+) -> Result<(), StorageError> {
+    conn.execute(
+        "INSERT INTO labels (doc_id, tag_id, state, source, tag_version, created_at)
+         VALUES (?1, ?2, ?3, 'human', ?4, ?5)
+         ON CONFLICT (doc_id, tag_id) DO UPDATE SET
+            state = excluded.state, source = excluded.source,
+            confidence = NULL, model_version = NULL,
+            tag_version = excluded.tag_version, created_at = excluded.created_at",
+        params![doc_id, tag.id, state.as_str(), tag.version, now],
+    )?;
+    conn.execute(
+        "INSERT INTO label_history (doc_id, tag_id, state, source, tag_version, created_at)
+         VALUES (?1, ?2, ?3, 'human', ?4, ?5)",
+        params![doc_id, tag.id, state.as_str(), tag.version, now],
     )?;
     Ok(())
 }
@@ -280,6 +296,49 @@ pub fn discard_stale(conn: &Connection, tag: &TagRow) -> Result<usize, StorageEr
         params![tag.id, tag.version],
     )?;
     Ok(n)
+}
+
+/// A document awaiting a decision on one tag in the Tags screen's per-tag
+/// review (SPEC 7.1).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct TagReviewCandidate {
+    pub doc_id: i64,
+    pub pub_key: String,
+    pub title: Option<String>,
+    /// `"pos"`/`"neg"` for a stale human label, `None` when unknown.
+    pub previous_state: Option<String>,
+    pub previous_version: Option<i64>,
+}
+
+/// Reviewed documents (validated or auto-completed) that are unknown for
+/// `tag`, because the tag is newer than their review, plus those whose
+/// human label predates the tag's current version. In document order;
+/// the caller sorts by score.
+pub fn tag_review_candidates(
+    conn: &Connection,
+    tag: &TagRow,
+) -> Result<Vec<TagReviewCandidate>, StorageError> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT d.id, d.pub_key, d.title, l.state, l.tag_version
+         FROM documents d
+         LEFT JOIN labels l ON l.doc_id = d.id AND l.tag_id = ?1
+         WHERE d.review_state IN {}
+           AND (l.doc_id IS NULL OR (l.source = 'human' AND l.tag_version < ?2))
+         ORDER BY d.id ASC",
+        crate::tags::REVIEWED_STATES
+    ))?;
+    let rows = stmt
+        .query_map(params![tag.id, tag.version], |row| {
+            Ok(TagReviewCandidate {
+                doc_id: row.get(0)?,
+                pub_key: row.get(1)?,
+                title: row.get(2)?,
+                previous_state: row.get(3)?,
+                previous_version: row.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
 }
 
 #[cfg(test)]
@@ -583,5 +642,63 @@ mod tests {
             )
             .unwrap();
         assert_eq!(history, 1);
+    }
+
+    #[test]
+    fn tag_review_candidates_are_unknown_or_stale_reviewed_documents() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let (doc_id, battery, solar) = setup(&conn);
+        validate_document(
+            &conn,
+            doc_id,
+            std::slice::from_ref(&battery),
+            &HashSet::new(),
+            NOW,
+        )
+        .unwrap();
+        // A queued document is never a candidate.
+        documents::insert_pending(&conn, "EP2", "EP2", NOW).unwrap();
+
+        // Solar is newer than the validation: unknown.
+        let candidates = tag_review_candidates(&conn, &solar).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].doc_id, doc_id);
+        assert_eq!(candidates[0].previous_state, None);
+        assert!(tag_review_candidates(&conn, &battery).unwrap().is_empty());
+
+        let battery = tags::update(
+            &conn,
+            battery.id,
+            tags::TagFields {
+                name: "Battery",
+                definition: "About rechargeable batteries",
+                parent_id: None,
+                color: None,
+                hotkey: None,
+            },
+            true,
+        )
+        .unwrap()
+        .tag;
+        let candidates = tag_review_candidates(&conn, &battery).unwrap();
+        assert_eq!(candidates[0].previous_state.as_deref(), Some("neg"));
+        assert_eq!(candidates[0].previous_version, Some(1));
+
+        write_human_label(&conn, doc_id, &battery, LabelState::Pos, NOW).unwrap();
+        write_human_label(&conn, doc_id, &solar, LabelState::Neg, NOW).unwrap();
+        assert!(tag_review_candidates(&conn, &battery).unwrap().is_empty());
+        assert!(tag_review_candidates(&conn, &solar).unwrap().is_empty());
+        assert_eq!(
+            get_label(&conn, doc_id, battery.id).unwrap().map(|l| l.0),
+            Some(LabelState::Pos)
+        );
+        let review_state: String = conn
+            .query_row(
+                "SELECT review_state FROM documents WHERE id = ?1",
+                params![doc_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(review_state, "validated");
     }
 }

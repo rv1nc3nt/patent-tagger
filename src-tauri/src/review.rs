@@ -82,6 +82,14 @@ pub fn score_one_tag(
     }
 }
 
+/// Whether a score alone pre-checks the tag: at or above its calibrated
+/// threshold (SPEC 7.5, 0.5 if not yet calibrated), from any source except
+/// zero-shot, whose suggestions are "never pre-checked" (SPEC 7.2).
+pub fn score_suggests(tag: &TagRow, score: Option<f32>, source: Option<&str>) -> bool {
+    let effective_threshold = tag.threshold.unwrap_or(0.5);
+    source != Some("zero_shot") && score.is_some_and(|s| s >= effective_threshold)
+}
+
 pub fn score_document(
     conn: &Connection,
     embedder: &impl Embedder,
@@ -107,9 +115,7 @@ pub fn score_document(
             }
         };
 
-        let effective_threshold = tag.threshold.unwrap_or(0.5);
-        let suggested = already_positive.contains(&tag.id)
-            || (source != Some("zero_shot") && score.is_some_and(|s| s >= effective_threshold));
+        let suggested = already_positive.contains(&tag.id) || score_suggests(tag, score, source);
 
         let automatic = auto_labelled.contains(&tag.id);
         let uncertain = !automatic
