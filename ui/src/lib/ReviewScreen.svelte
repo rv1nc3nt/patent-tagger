@@ -162,7 +162,11 @@
 
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null;
-    const isTyping = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+    // Checkboxes are not text entry: shortcuts still apply after clicking one.
+    const isTyping =
+      target?.tagName === "TEXTAREA" ||
+      target?.tagName === "SELECT" ||
+      (target instanceof HTMLInputElement && target.type !== "checkbox");
 
     if (e.key === "/") {
       e.preventDefault();
@@ -176,6 +180,8 @@
     } else if (e.key === "k" || e.key === "K") {
       prev();
     } else if (e.key === "Enter") {
+      // Also stops Enter from activating a toolbar button that kept focus
+      // after being clicked: Enter always means validate.
       e.preventDefault();
       handleValidate();
     } else if (e.key === "s" || e.key === "S") {
@@ -229,6 +235,15 @@
 
       {#if doc}
         <section class="detail-pane">
+          <div class="toolbar">
+            <button onclick={prev} disabled={index === 0} title="Previous document (K)">← Previous</button>
+            <button onclick={next} disabled={index >= queue.length - 1} title="Next document (J)">Next →</button>
+            <span class="spacer"></span>
+            <button onclick={handleSkip} title="Skip this document (S)">Skip</button>
+            <button class="primary" onclick={handleValidate} title="Validate the checked tags and move on (Enter)">
+              Validate
+            </button>
+          </div>
           <h2>{doc.pub_key}</h2>
           <p class="title">{doc.title}</p>
           <p class="meta">
@@ -404,6 +419,21 @@
   .queue-pane li.current button {
     background: var(--bg-alt);
     border-radius: 4px;
+    font-weight: 600;
+  }
+  .toolbar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .toolbar .spacer {
+    flex: 1;
+  }
+  .toolbar .primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
     font-weight: 600;
   }
   .detail-pane .title {
