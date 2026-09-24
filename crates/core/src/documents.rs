@@ -112,6 +112,27 @@ pub fn insert_pending(
     })
 }
 
+/// Records a document's DOCDB family before it is fetched, for documents
+/// imported from a search (SPEC 5.6): the next batch then already sees the
+/// family. The fetch later stores the same value.
+pub fn set_family_id(conn: &Connection, doc_id: i64, family_id: &str) -> Result<(), StorageError> {
+    conn.execute(
+        "UPDATE documents SET family_id = ?2 WHERE id = ?1",
+        params![doc_id, family_id],
+    )?;
+    Ok(())
+}
+
+/// Whether any document of DOCDB family `family_id` is in the database.
+pub fn family_exists(conn: &Connection, family_id: &str) -> Result<bool, StorageError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE family_id = ?1)",
+        params![family_id],
+        |row| row.get(0),
+    )
+    .map_err(StorageError::from)
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FetchedData {
     pub title: Option<String>,
@@ -311,6 +332,17 @@ mod tests {
         assert_eq!(detail.title.as_deref(), Some("A gadget"));
         assert_eq!(detail.applicants, vec!["ACME", "Foo Corp"]);
         assert_eq!(detail.kind_codes, vec!["A1", "B1"]);
+    }
+
+    #[test]
+    fn family_exists_once_a_document_of_the_family_is_recorded() {
+        let conn = storage::open_in_memory().unwrap();
+        let doc_id = insert_pending(&conn, "EP1111111", "EP.1111111.A1", "2026-01-01T00:00:00Z")
+            .unwrap()
+            .unwrap();
+        assert!(!family_exists(&conn, "42").unwrap());
+        set_family_id(&conn, doc_id, "42").unwrap();
+        assert!(family_exists(&conn, "42").unwrap());
     }
 
     #[test]

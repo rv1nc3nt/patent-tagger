@@ -14,8 +14,12 @@ pub enum StorageError {
     Migration(#[from] rusqlite_migration::Error),
 }
 
-static MIGRATIONS: LazyLock<Migrations<'static>> =
-    LazyLock::new(|| Migrations::new(vec![M::up(include_str!("schema.sql"))]));
+static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
+    Migrations::new(vec![
+        M::up(include_str!("schema.sql")),
+        M::up(include_str!("002_saved_searches.sql")),
+    ])
+});
 
 /// Opens (creating if needed) the database at `path`, enables WAL mode and
 /// foreign keys, and migrates it to the latest schema.
@@ -66,7 +70,7 @@ mod tests {
     fn migrations_are_internally_consistent() {
         MIGRATIONS
             .validate()
-            .expect("schema.sql should define a single valid migration");
+            .expect("every migration should be valid");
     }
 
     #[test]
@@ -88,6 +92,7 @@ mod tests {
             "classifiers",
             "jobs",
             "settings",
+            "saved_searches",
         ] {
             assert!(
                 tables.iter().any(|t| t == expected),

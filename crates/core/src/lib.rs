@@ -15,6 +15,7 @@ pub mod number;
 pub mod predictions;
 pub mod retrieval_policy;
 pub mod scoring;
+pub mod searches;
 pub mod selection;
 pub mod settings;
 pub mod storage;
