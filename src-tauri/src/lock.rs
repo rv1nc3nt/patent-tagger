@@ -2,43 +2,40 @@
 //! pipelines from running at once, whether from the GUI or the command
 //! line."
 
-use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
+use std::fs::{File, OpenOptions, TryLockError};
+use std::path::Path;
 
 const LOCK_FILE_NAME: &str = "import.lock";
 
+/// Holds an exclusive OS lock on `import.lock` for as long as it lives.
 pub struct PipelineLock {
-    path: PathBuf,
+    // Never read: the lock is released when this handle is closed on drop.
+    _file: File,
 }
 
 impl PipelineLock {
-    /// Atomically creates the lock file, failing if it already exists -
-    /// a simple, portable "poor man's lock" rather than a true OS advisory
-    /// lock (which would need a platform-specific API or a new
-    /// dependency). A lock left behind by a process that crashed instead
-    /// of exiting normally (so [`Drop`] never ran) has to be removed
-    /// manually before another pipeline can run - an accepted simplicity
-    /// trade-off given how rarely that should happen in practice.
+    /// Takes an exclusive OS file lock (`flock` on Linux, `LockFileEx` on
+    /// Windows, via `std::fs::File::try_lock`) on the lock file, failing
+    /// immediately if another pipeline holds it. The OS releases the lock
+    /// when the holding process exits, even if it crashes. The file itself
+    /// is left in place, so a leftover `import.lock` never blocks a later
+    /// run. Two acquisitions within the same process also conflict,
+    /// because each opens its own handle.
     pub fn acquire(data_dir: &Path) -> anyhow::Result<Self> {
         let path = data_dir.join(LOCK_FILE_NAME);
-        OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(false)
             .open(&path)
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "another import or retrieval pipeline appears to already be running \
-                 (lock file {path:?} already exists - delete it if a previous run crashed \
-                 without cleaning up): {e}"
-                )
-            })?;
-        Ok(Self { path })
-    }
-}
-
-impl Drop for PipelineLock {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+            .map_err(|e| anyhow::anyhow!("opening lock file {path:?}: {e}"))?;
+        match file.try_lock() {
+            Ok(()) => Ok(Self { _file: file }),
+            Err(TryLockError::WouldBlock) => Err(anyhow::anyhow!(
+                "another import or retrieval pipeline is already running (lock file {path:?} is held)"
+            )),
+            Err(TryLockError::Error(e)) => Err(anyhow::anyhow!("locking {path:?}: {e}")),
+        }
     }
 }
 
@@ -63,12 +60,10 @@ mod tests {
     }
 
     #[test]
-    fn drop_removes_the_lock_file() {
+    fn a_leftover_lock_file_from_a_crashed_run_does_not_block() {
         let dir = tempfile::tempdir().unwrap();
-        let lock_path = dir.path().join(LOCK_FILE_NAME);
-        let lock = PipelineLock::acquire(dir.path()).unwrap();
-        assert!(lock_path.exists());
-        drop(lock);
-        assert!(!lock_path.exists());
+        // What a crashed process leaves behind: the file, but no OS lock.
+        std::fs::write(dir.path().join(LOCK_FILE_NAME), b"").unwrap();
+        assert!(PipelineLock::acquire(dir.path()).is_ok());
     }
 }
