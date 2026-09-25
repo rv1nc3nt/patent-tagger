@@ -11,6 +11,16 @@ pub const STATUS_FETCHED: &str = "fetched";
 pub const STATUS_NOT_AVAILABLE: &str = "not_available";
 pub const STATUS_ERROR: &str = "error";
 
+#[derive(Debug, thiserror::Error)]
+pub enum DrawingError {
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+    #[error("rotation must be 0, 90, 180 or 270 degrees, not {0}")]
+    InvalidRotation(i64),
+    #[error("no drawing page {1} for document {0}")]
+    PageNotFound(i64, i64),
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct DrawingPage {
     pub doc_id: i64,
@@ -21,6 +31,9 @@ pub struct DrawingPage {
     pub width: Option<i64>,
     pub height: Option<i64>,
     pub fetched_at: Option<String>,
+    /// Degrees clockwise the user turned the page for display: 0, 90, 180
+    /// or 270. `width`/`height` are those of the stored, unrotated image.
+    pub rotation: i64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
@@ -47,7 +60,7 @@ pub fn get_status(
 
 pub fn list_pages(conn: &Connection, doc_id: i64) -> Result<Vec<DrawingPage>, StorageError> {
     let mut stmt = conn.prepare(
-        "SELECT doc_id, page, source, path, width, height, fetched_at
+        "SELECT doc_id, page, source, path, width, height, fetched_at, rotation
          FROM drawings WHERE doc_id = ?1 ORDER BY page ASC",
     )?;
     let rows = stmt
@@ -85,9 +98,34 @@ pub fn insert_page(conn: &Connection, new: &NewDrawingPage) -> Result<(), Storag
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT (doc_id, page) DO UPDATE SET
             source = excluded.source, path = excluded.path,
-            width = excluded.width, height = excluded.height, fetched_at = excluded.fetched_at",
+            width = excluded.width, height = excluded.height, fetched_at = excluded.fetched_at,
+            rotation = CASE WHEN drawings.source IS excluded.source THEN drawings.rotation ELSE 0 END",
         params![doc_id, page, source, path, width, height, fetched_at],
     )?;
+    Ok(())
+}
+
+/// Saves the user's rotation of one page. It survives a re-retrieval of
+/// the same publication's drawings, and is reset when the page comes from
+/// another publication (see [`insert_page`]).
+pub fn set_rotation(
+    conn: &Connection,
+    doc_id: i64,
+    page: i64,
+    rotation: i64,
+) -> Result<(), DrawingError> {
+    if ![0, 90, 180, 270].contains(&rotation) {
+        return Err(DrawingError::InvalidRotation(rotation));
+    }
+    let changed = conn
+        .execute(
+            "UPDATE drawings SET rotation = ?3 WHERE doc_id = ?1 AND page = ?2",
+            params![doc_id, page, rotation],
+        )
+        .map_err(StorageError::from)?;
+    if changed == 0 {
+        return Err(DrawingError::PageNotFound(doc_id, page));
+    }
     Ok(())
 }
 
@@ -158,6 +196,7 @@ fn row_to_page(row: &rusqlite::Row) -> rusqlite::Result<DrawingPage> {
         width: row.get(4)?,
         height: row.get(5)?,
         fetched_at: row.get(6)?,
+        rotation: row.get(7)?,
     })
 }
 
@@ -283,5 +322,40 @@ mod tests {
         let pages = list_pages(&conn, doc_id).unwrap();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].width, Some(3508));
+    }
+
+    #[test]
+    fn rotation_is_saved_and_kept_unless_the_source_changes() {
+        let conn = storage::open_in_memory().expect("in-memory db");
+        let doc_id = new_doc(&conn);
+        let page = |source| NewDrawingPage {
+            doc_id,
+            page: 1,
+            source,
+            path: "drawings/EP1234567/001.png",
+            width: 2479,
+            height: 3508,
+            fetched_at: NOW,
+        };
+        insert_page(&conn, &page("EP.1234567.A1")).unwrap();
+        assert_eq!(list_pages(&conn, doc_id).unwrap()[0].rotation, 0);
+
+        set_rotation(&conn, doc_id, 1, 90).unwrap();
+        assert_eq!(list_pages(&conn, doc_id).unwrap()[0].rotation, 90);
+
+        insert_page(&conn, &page("EP.1234567.A1")).unwrap();
+        assert_eq!(list_pages(&conn, doc_id).unwrap()[0].rotation, 90);
+
+        insert_page(&conn, &page("WO.2019123456.A1")).unwrap();
+        assert_eq!(list_pages(&conn, doc_id).unwrap()[0].rotation, 0);
+
+        assert!(matches!(
+            set_rotation(&conn, doc_id, 1, 45),
+            Err(DrawingError::InvalidRotation(45))
+        ));
+        assert!(matches!(
+            set_rotation(&conn, doc_id, 7, 90),
+            Err(DrawingError::PageNotFound(_, 7))
+        ));
     }
 }
