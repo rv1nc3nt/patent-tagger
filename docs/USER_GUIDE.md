@@ -75,6 +75,19 @@ When the requested publication has no English abstract, the application takes on
 
 OPS limits how fast and how much you can download. The application slows down or pauses when OPS asks it to. An import interrupted by closing the application resumes at the next launch.
 
+### Searching by applicant
+
+Instead of numbers, you can import an applicant's publications, 100 search results at a time. Under **Search by applicant**, give the search a name and enter the applicant. Separate name variants with `;`, e.g. `Siemens Healthineers; Siemens Healthcare`: OPS does not group spellings or subsidiaries. Optionally, restrict the publication country (e.g. `EP`) and the years. The query sent to OPS is shown as you type. Click **Save search**.
+
+Each saved search shows how many results it has read and how many documents it imported. **Fetch next 100** reads the next 100 results and imports what is new, like a pasted list:
+
+- Only one document per patent family is imported: the family's earliest publication with an English abstract, or its earliest publication when none has one.
+- A family already in your library is skipped and listed under "Family already in library".
+- Results are read newest first. When a search has been read to the end, **Start over** reads it again from the start, to pick up new publications. Families you already have are skipped.
+- OPS only lets you read the first 2,000 results of a search. When more match, the search says so: narrow it with a country or years, or split it into several searches.
+
+A search cannot be edited. Delete it and save a new one; the documents it imported stay.
+
 ## 4. Reviewing
 
 The **Review** tab is the main screen and is built for the keyboard.
@@ -220,11 +233,17 @@ The same executable runs without a window when given a command, so imports can b
 
 ```
 patent-tagger import numbers.txt [--fetch-fulltext] [--fetch-drawings]
+patent-tagger import --search "<search name>" [--fetch-fulltext] [--fetch-drawings]
+patent-tagger search add "<search name>" --applicant "<name>[; <name>…]" [--country EP] [--from 2020] [--to 2024]
+patent-tagger search list
+patent-tagger search delete "<search name>"
+patent-tagger search restart "<search name>"
 patent-tagger export --tag "<tag name>" --out <folder> [--format txt|csv|json]
 patent-tagger status
 ```
 
 - `import` runs the whole pipeline: fetch, suggest, auto-complete where allowed, queue the rest, and retrieve full text and drawings according to your policies. `--fetch-fulltext` and `--fetch-drawings` retrieve them for every imported document regardless of policy. It prints a summary and exits with a non-zero code if any document failed.
+- `import --search` imports the next 100 results of a saved search (see "Searching by applicant"). A scheduled run continues where the previous one stopped. `search add`, `list`, `delete` and `restart` manage the saved searches, which are shared with the Import tab.
 - `export` writes the documents carrying a tag: a folder named after the tag with one folder per document inside (`txt`, the default), or a single CSV or JSON file.
 - `status` prints the data folder, document counts per review state, and pending or failed jobs.
 

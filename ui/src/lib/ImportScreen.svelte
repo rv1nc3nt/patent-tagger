@@ -6,12 +6,15 @@
     onImportProgress,
     retryDocument,
     runImportJobs,
+    type BatchReport,
     type DocumentOutcome,
     type ImportReport,
   } from "./api";
+  import SearchPanel from "./SearchPanel.svelte";
 
   let rawInput = $state("");
   let report = $state<ImportReport | null>(null);
+  let batch = $state<BatchReport | null>(null);
   let outcomes = $state<DocumentOutcome[]>([]);
   let isBusy = $state(false);
   let progressDone = $state(0);
@@ -64,12 +67,26 @@
     isBusy = true;
     try {
       report = await importNumbers(rawInput);
+      batch = null;
       rawInput = "";
     } catch (err) {
       errorMessage = String(err);
       isBusy = false;
       return;
     }
+    await runFetchStage();
+  }
+
+  async function handleBatch(result: BatchReport) {
+    errorMessage = "";
+    batch = result;
+    outcomes = [];
+    report = {
+      imported: result.imported,
+      duplicates: result.duplicates,
+      needs_normalisation: [],
+      unparseable: [],
+    };
     await runFetchStage();
   }
 
@@ -112,6 +129,8 @@
     {/if}
   </div>
 
+  <SearchPanel busy={isBusy} onBatch={handleBatch} />
+
   {#if errorMessage}
     <p class="error-banner">{errorMessage}</p>
   {/if}
@@ -120,8 +139,20 @@
     <div class="report">
       <h2>Report</h2>
 
+      {#if batch}
+        <p class="batch-summary">
+          {#if batch.range}
+            {batch.search?.name}: read results {batch.range[0]}–{batch.range[1]} of {batch.search?.total_results}
+            ({batch.families} {batch.families === 1 ? "family" : "families"}), {batch.imported.length} new.
+          {:else}
+            {batch.search?.name}: no more results to read. Use "Start over" to look for new publications.
+          {/if}
+        </p>
+      {/if}
+
       {@render section("Imported", fetched.map((o) => `${o.pub_key} — ${o.title ?? ""}`))}
       {@render section("Duplicates", report.duplicates)}
+      {@render section("Family already in library", batch?.known_families ?? [])}
       {@render section("Related documents", related)}
       {@render section("No English abstract", noEnglishAbstract.map((o) => o.pub_key))}
       {@render section("Needs manual number lookup", report.needs_normalisation)}
@@ -184,6 +215,10 @@
   .progress {
     color: var(--muted);
     font-size: 0.85rem;
+  }
+  .batch-summary {
+    margin: 0;
+    font-size: 0.9rem;
   }
   .error-banner {
     color: var(--danger);

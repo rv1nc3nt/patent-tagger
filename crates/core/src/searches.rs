@@ -64,6 +64,10 @@ pub struct SavedSearch {
     pub last_run_at: Option<String>,
     /// Every reachable result has been read (see [`next_range`]).
     pub exhausted: bool,
+    /// Results read so far in this pass.
+    pub results_read: i64,
+    /// More results match than OPS lets a client read ([`MAX_RESULTS`]).
+    pub capped: bool,
 }
 
 /// The applicant names in `applicant`, split on `;`, trimmed, with the
@@ -152,8 +156,16 @@ fn row_to_search(row: &rusqlite::Row) -> rusqlite::Result<SavedSearch> {
         created_at: row.get(10)?,
         last_run_at: row.get(11)?,
         exhausted: false,
+        results_read: 0,
+        capped: false,
     };
     search.exhausted = next_range(&search).is_none();
+    search.results_read = search
+        .total_results
+        .map_or(0, |total| (search.next_start - 1).min(total));
+    search.capped = search
+        .total_results
+        .is_some_and(|total| total > MAX_RESULTS);
     Ok(search)
 }
 
@@ -457,6 +469,8 @@ mod tests {
         let search = get(&conn, search.id).unwrap().unwrap();
         assert_eq!(next_range(&search), Some((101, 150)));
         assert_eq!(search.imported, 40);
+        assert_eq!(search.results_read, 100);
+        assert!(!search.capped);
 
         record_batch(&conn, search.id, 150, 150, 10, NOW).unwrap();
         let search = get(&conn, search.id).unwrap().unwrap();
@@ -478,7 +492,10 @@ mod tests {
         let search = get(&conn, search.id).unwrap().unwrap();
         assert_eq!(next_range(&search), Some((1901, 2000)));
         record_batch(&conn, search.id, 5000, 2000, 0, NOW).unwrap();
-        assert!(get(&conn, search.id).unwrap().unwrap().exhausted);
+        let search = get(&conn, search.id).unwrap().unwrap();
+        assert!(search.exhausted);
+        assert!(search.capped);
+        assert_eq!(search.results_read, 2000);
     }
 
     #[test]

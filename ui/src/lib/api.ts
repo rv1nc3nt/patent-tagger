@@ -39,6 +39,66 @@ export function testOpsConnection(): Promise<string> {
   return invoke("test_ops_connection");
 }
 
+export interface SearchFields {
+  name: string;
+  applicant: string;
+  country: string | null;
+  year_from: number | null;
+  year_to: number | null;
+}
+
+export interface SavedSearch {
+  id: number;
+  name: string;
+  applicant: string;
+  country: string | null;
+  year_from: number | null;
+  year_to: number | null;
+  query: string;
+  total_results: number | null;
+  next_start: number;
+  imported: number;
+  created_at: string;
+  last_run_at: string | null;
+  exhausted: boolean;
+  results_read: number;
+  capped: boolean;
+}
+
+export interface BatchReport {
+  search: SavedSearch | null;
+  range: [number, number] | null;
+  scanned: number;
+  families: number;
+  known_families: string[];
+  duplicates: string[];
+  imported: string[];
+}
+
+export function listSearches(): Promise<SavedSearch[]> {
+  return invoke("list_searches");
+}
+
+export function previewSearchQuery(fields: SearchFields): Promise<string> {
+  return invoke("preview_search_query", { fields });
+}
+
+export function createSearch(fields: SearchFields): Promise<SavedSearch> {
+  return invoke("create_search", { fields });
+}
+
+export function deleteSearch(searchId: number): Promise<void> {
+  return invoke("delete_search", { searchId });
+}
+
+export function restartSearch(searchId: number): Promise<void> {
+  return invoke("restart_search", { searchId });
+}
+
+export function fetchSearchBatch(searchId: number): Promise<BatchReport> {
+  return invoke("fetch_search_batch", { searchId });
+}
+
 export function onImportProgress(callback: (outcome: DocumentOutcome) => void): Promise<UnlistenFn> {
   return listen<DocumentOutcome>("import-progress", (event) => callback(event.payload));
 }

@@ -307,8 +307,13 @@ fn run_search(action: SearchAction) -> anyhow::Result<()> {
                 let progress = match s.total_results {
                     None => "not run yet".to_string(),
                     Some(total) => format!(
-                        "read {} of {total}{}",
-                        (s.next_start - 1).min(total),
+                        "read {} of {total}{}{}",
+                        s.results_read,
+                        if s.capped {
+                            " (only 2000 readable)"
+                        } else {
+                            ""
+                        },
                         if s.exhausted { " (done)" } else { "" }
                     ),
                 };
