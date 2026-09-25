@@ -34,6 +34,7 @@
   let activeTab = $state<DetailTab>("abstract");
   let retrievingFulltext = $state(false);
   let retrievingDrawings = $state(false);
+  let queueList = $state<HTMLUListElement | undefined>(undefined);
 
   const fulltextAvailable = $derived(
     doc?.fulltext?.status === "fetched" || doc?.fulltext?.status === "non_english_only",
@@ -207,6 +208,12 @@
   $effect(() => {
     refreshQueue();
   });
+
+  // Keep the current entry visible in the scrollable queue list (J/K, removals).
+  $effect(() => {
+    const current = queueList?.children[index];
+    if (current instanceof HTMLElement) current.scrollIntoView({ block: "nearest" });
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -227,7 +234,7 @@
             <option value="uncertain">Most uncertain first</option>
           </select>
         </div>
-        <ul>
+        <ul bind:this={queueList}>
           {#each queue as entry, i (entry.id)}
             <li class:current={i === index}>
               <button
@@ -437,6 +444,19 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+  }
+  /* The queue scrolls on its own and stays in view, so a long queue never
+     pushes the abstract off screen. */
+  .queue-pane {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 7rem);
+  }
+  .queue-pane ul {
+    overflow-y: auto;
+    min-height: 0;
   }
   .queue-pane button {
     width: 100%;
