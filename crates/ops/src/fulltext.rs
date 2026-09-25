@@ -41,7 +41,7 @@ pub fn parse_inquiry(xml: &str) -> Result<Vec<FulltextInstance>, OpsError> {
 /// The description's text, converted to plain text (SPEC 5.5): paragraph
 /// numbers kept as `[0001]` (already literal text in OPS's own `<p>`
 /// content - verified against `ep1000000_a1_description.xml`), one
-/// paragraph per line, entities decoded (roxmltree does this
+/// paragraph or `<heading>` per line, entities decoded (roxmltree does this
 /// automatically), whitespace normalised, non-text content (tables,
 /// chemistry, maths) replaced with a placeholder rather than garbled text.
 ///
@@ -61,14 +61,21 @@ pub fn parse_description(xml: &str, lang: &str) -> Result<Option<(String, String
     };
     let lang = description.attribute("lang").unwrap_or("").to_string();
 
+    // Headings stay on their own lines (SPEC 5.5), in document order.
     let mut paragraph_number = 0;
     let text = description
         .children()
-        .filter(|n| n.has_tag_name("p"))
-        .map(|p| {
-            paragraph_number += 1;
-            paragraph_text(p, paragraph_number)
+        .filter_map(|n| {
+            if n.has_tag_name("p") {
+                paragraph_number += 1;
+                Some(paragraph_text(n, paragraph_number))
+            } else if n.has_tag_name("heading") {
+                Some(normalise_whitespace(&text_content(n)))
+            } else {
+                None
+            }
         })
+        .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
     Ok(Some((lang, text)))
@@ -146,6 +153,7 @@ fn non_text_kind(node: Node) -> Option<&'static str> {
 
 fn text_content(node: Node) -> String {
     node.descendants()
+        .filter(|n| n.is_text())
         .filter_map(|n| n.text())
         .collect::<Vec<_>>()
         .join("")
@@ -166,6 +174,21 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         ))
         .unwrap_or_else(|e| panic!("reading fixture {name}: {e}"))
+    }
+
+    /// Each paragraph and claim once: an element's `text()` is its first
+    /// text child, so collecting it besides the text nodes doubled them.
+    #[test]
+    fn paragraphs_and_claims_are_not_duplicated() {
+        let (_, description) = parse_description(&fixture("ep1000000_a1_description.xml"), "en")
+            .unwrap()
+            .unwrap();
+        assert_eq!(description.matches("[0001]").count(), 1);
+        assert_eq!(description.lines().count(), 28);
+        let (_, claims) = parse_claims(&fixture("ep1000000_a1_claims.xml"), "en")
+            .unwrap()
+            .unwrap();
+        assert_eq!(claims.matches("1. Apparatus for manufacturing").count(), 1);
     }
 
     #[test]
@@ -263,5 +286,26 @@ mod tests {
         let instances =
             parse_inquiry(&fixture("us5960411_fulltext_not_available_404.xml")).unwrap();
         assert!(instances.is_empty());
+    }
+
+    /// No recorded response has a `<heading>` (the only real description,
+    /// EP1000000 from 2000, has none), so this uses a synthetic one. The
+    /// element name follows the EPO full-text DTD; see docs/DECISIONS.md.
+    #[test]
+    fn description_keeps_headings_on_their_own_lines() {
+        let xml = r#"<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org">
+            <ftxt:fulltext-documents xmlns="http://www.epo.org/fulltext" xmlns:ftxt="http://www.epo.org/fulltext">
+            <ftxt:fulltext-document><description lang="EN">
+              <heading id="h0001">FIELD OF THE
+                 INVENTION</heading>
+              <p id="p0001" num="0001">[0001]  The invention relates to bricks.</p>
+              <heading id="h0002">BACKGROUND</heading>
+              <p id="p0002" num="0002">[0002] Known presses.</p>
+            </description></ftxt:fulltext-document></ftxt:fulltext-documents></ops:world-patent-data>"#;
+        let (_, text) = parse_description(xml, "en").unwrap().unwrap();
+        assert_eq!(
+            text,
+            "FIELD OF THE INVENTION\n[0001] The invention relates to bricks.\nBACKGROUND\n[0002] Known presses."
+        );
     }
 }
