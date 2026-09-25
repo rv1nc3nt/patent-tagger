@@ -175,11 +175,8 @@
 
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null;
-    // Checkboxes are not text entry: shortcuts still apply after clicking one.
     const isTyping =
-      target?.tagName === "TEXTAREA" ||
-      target?.tagName === "SELECT" ||
-      (target instanceof HTMLInputElement && target.type !== "checkbox");
+      target?.tagName === "TEXTAREA" || target?.tagName === "SELECT" || target instanceof HTMLInputElement;
 
     if (e.key === "/") {
       e.preventDefault();
@@ -352,39 +349,41 @@
         </section>
 
         <section class="tags-pane">
-          <h2>Tags</h2>
-          {#if doc.tags.length === 0}
-            <p class="meta">No tags yet. Create them in the Tags tab.</p>
-          {/if}
-          <input
-            class="filter"
-            placeholder="Filter tags (/)"
-            bind:value={tagFilter}
-            bind:this={filterInput}
-          />
+          <div class="tags-header">
+            <h2>Tags</h2>
+            {#if doc.tags.length === 0}
+              <p class="meta">No tags yet. Create them in the Tags tab.</p>
+            {/if}
+            <input
+              class="filter"
+              placeholder="Filter tags (/)"
+              bind:value={tagFilter}
+              bind:this={filterInput}
+            />
+          </div>
           <ul>
             {#each visibleTags as { item: tag, depth } (tag.tag_id)}
-              <li
-                class:weak={tag.source === "zero_shot"}
-                class:automatic={tag.automatic}
-                class:uncertain={tag.uncertain}
-                style:margin-left="{depth}rem"
-              >
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={checked.has(tag.tag_id)}
-                    onchange={() => toggleTag(tag.tag_id)}
-                  />
-                  <span class="name">{tag.name}</span>
-                  {#if tag.automatic}<span class="badge" title="Decided automatically">auto</span>{/if}
-                  {#if tag.hotkey}<kbd>{tag.hotkey}</kbd>{/if}
-                </label>
-                {#if tag.score !== null}
-                  <div class="score-bar">
-                    <div class="fill" style:width="{tag.score * 100}%"></div>
-                  </div>
-                {/if}
+              <li style:margin-left="{depth}rem">
+                <button
+                  class="tag"
+                  class:selected={checked.has(tag.tag_id)}
+                  class:weak={tag.source === "zero_shot"}
+                  class:uncertain={tag.uncertain}
+                  aria-pressed={checked.has(tag.tag_id)}
+                  onclick={() => toggleTag(tag.tag_id)}
+                >
+                  <span class="line">
+                    <span class="check" aria-hidden="true">{checked.has(tag.tag_id) ? "✓" : ""}</span>
+                    <span class="name">{tag.name}</span>
+                    {#if tag.automatic}<span class="badge" title="Decided automatically">auto</span>{/if}
+                    {#if tag.hotkey}<kbd>{tag.hotkey}</kbd>{/if}
+                  </span>
+                  {#if tag.score !== null}
+                    <span class="score-bar">
+                      <span class="fill" style:width="{tag.score * 100}%"></span>
+                    </span>
+                  {/if}
+                </button>
               </li>
             {/each}
           </ul>
@@ -445,16 +444,18 @@
     flex-direction: column;
     gap: 0.25rem;
   }
-  /* The queue scrolls on its own and stays in view, so a long queue never
-     pushes the abstract off screen. */
-  .queue-pane {
+  /* The queue and the tags scroll on their own and stay in view, so a long
+     list never pushes the abstract off screen. */
+  .queue-pane,
+  .tags-pane {
     position: sticky;
     top: 0;
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - 7rem);
   }
-  .queue-pane ul {
+  .queue-pane ul,
+  .tags-pane ul {
     overflow-y: auto;
     min-height: 0;
   }
@@ -550,24 +551,55 @@
     padding: 0.3rem 0.5rem;
     margin-bottom: 0.5rem;
   }
-  .tags-pane li {
-    padding: 0.25rem 0;
-    border-bottom: 1px solid var(--border);
+  .tags-pane .tag {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.9rem;
+    background: var(--bg);
   }
-  .tags-pane li.weak label {
+  .tags-pane .tag.selected {
+    background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+    border-color: var(--accent);
+    color: var(--text-h);
+    font-weight: 600;
+  }
+  .tags-pane .tag.weak .name {
     opacity: 0.7;
     font-style: italic;
   }
-  .tags-pane li.automatic {
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    border-radius: 4px;
-  }
-  .tags-pane li.uncertain {
+  .tags-pane .tag.uncertain {
     box-shadow: inset 3px 0 0 var(--series-recall);
-    padding-left: 0.35rem;
+  }
+  .tags-pane .line {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .tags-pane .check {
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.7rem;
+  }
+  .tags-pane .tag.selected .check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .tags-pane .name {
+    flex: 1;
   }
   .tags-pane .badge {
     font-size: 0.65rem;
+    font-weight: 400;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--accent);
@@ -575,22 +607,15 @@
     border-radius: 3px;
     padding: 0 0.25rem;
   }
-  .tags-pane label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .tags-pane .name {
-    flex: 1;
-  }
   .score-bar {
+    display: block;
     height: 4px;
     background: var(--border);
     border-radius: 2px;
-    margin-top: 0.2rem;
     overflow: hidden;
   }
   .score-bar .fill {
+    display: block;
     height: 100%;
     background: var(--accent);
   }
