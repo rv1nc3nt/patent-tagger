@@ -167,13 +167,11 @@ pub fn restart_search(state: State<Db>, search_id: i64) -> Result<(), String> {
 #[tauri::command]
 pub async fn fetch_search_batch(
     state: State<'_, Db>,
+    pipeline: State<'_, crate::pipeline::Pipeline>,
     search_id: i64,
 ) -> Result<BatchReport, String> {
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
-    let creds = crate::platform::credentials::load(&state.data_dir)
-        .map_err(|e| e.to_string())?
-        .ok_or("no OPS credentials saved yet")?;
-    let client = OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    let _turn = pipeline.turn().await.map_err(|e| format!("{e:#}"))?;
+    let client = crate::commands::ops_client(&state)?;
     fetch_next_batch(
         &state.conn,
         &client,

@@ -7,6 +7,7 @@ mod import_worker;
 mod library;
 mod lock;
 mod model;
+mod pipeline;
 mod platform;
 mod retrain;
 mod retrieval_worker;
@@ -88,10 +89,15 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            app.manage(db::open().map_err(|e| e.to_string())?);
+            let db = db::open().map_err(|e| e.to_string())?;
+            app.manage(pipeline::Pipeline::new(db.data_dir.clone()));
+            app.manage(db);
             app.manage(model::Model(
                 embed_lib::BgeSmallEmbedder::load().map_err(|e| e.to_string())?,
             ));
+            // Retrieval left pending by an earlier session (SPEC 5.4: jobs
+            // resume after a restart).
+            pipeline::spawn_retrieval(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -142,7 +142,11 @@ fn run_import(
     fetch_drawings: bool,
 ) -> anyhow::Result<()> {
     let db = crate::db::open()?;
-    let _lock = crate::lock::PipelineLock::acquire(&db.data_dir)?;
+    // Waits for the GUI's current job instead of failing, so a scheduled
+    // import is never lost to a busy window.
+    let _lock = crate::lock::PipelineLock::acquire_blocking(&db.data_dir, || {
+        println!("waiting for the running import or retrieval to finish…");
+    })?;
 
     let creds = crate::platform::credentials::load(&db.data_dir)?.ok_or_else(|| {
         anyhow::anyhow!(
@@ -194,8 +198,9 @@ fn run_import(
         &db.conn,
         &client,
         &embedder,
+        None,
         |_| {},
-    ));
+    ))?;
 
     let automation_summary = {
         let conn = db
@@ -225,14 +230,18 @@ fn run_import(
     rt.block_on(crate::retrieval_worker::run_fulltext(
         &db.conn,
         &client,
+        None,
+        None,
         |_| {},
-    ));
+    ))?;
     rt.block_on(crate::retrieval_worker::run_drawings(
         &db.conn,
         &client,
         &db.data_dir,
+        None,
+        None,
         |_| {},
-    ));
+    ))?;
 
     let errors = outcomes
         .iter()

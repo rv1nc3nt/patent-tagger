@@ -184,15 +184,15 @@ pub(crate) fn export_document_folder(
 /// SPEC section 8's Library "bulk action: retrieve full text or drawings
 /// for the current selection". Enqueues a job per document (skipping any
 /// already-successful ones - same rule as after-tagging enqueueing) then
-/// drains the queue once, synchronously, so the caller's promise resolves
-/// once the batch is done.
+/// retrieves the selection's jobs, one pipeline turn each, so the caller's
+/// promise resolves once the batch is done.
 #[tauri::command]
 pub async fn bulk_retrieve(
     state: State<'_, Db>,
+    pipeline: State<'_, crate::pipeline::Pipeline>,
     doc_ids: Vec<i64>,
     kind: String,
 ) -> Result<(), String> {
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
     let now = crate::commands::current_timestamp();
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
@@ -223,17 +223,28 @@ pub async fn bulk_retrieve(
         }
     }
 
-    let creds = crate::platform::credentials::load(&state.data_dir)
-        .map_err(|e| e.to_string())?
-        .ok_or("no OPS credentials saved yet")?;
-    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
+    let client = crate::commands::ops_client(&state)?;
     match kind.as_str() {
-        "fulltext" => crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await,
-        "drawings" => {
-            crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {})
-                .await
-        }
-        _ => {}
-    }
+        "fulltext" => crate::retrieval_worker::run_fulltext(
+            &state.conn,
+            &client,
+            Some(&pipeline),
+            Some(&doc_ids),
+            |_| {},
+        )
+        .await
+        .map_err(|e| format!("{e:#}"))?,
+        "drawings" => crate::retrieval_worker::run_drawings(
+            &state.conn,
+            &client,
+            &state.data_dir,
+            Some(&pipeline),
+            Some(&doc_ids),
+            |_| {},
+        )
+        .await
+        .map_err(|e| format!("{e:#}"))?,
+        _ => 0,
+    };
     Ok(())
 }

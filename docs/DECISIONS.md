@@ -299,3 +299,14 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - Every synchronous command is declared `#[tauri::command(async)]`, so it runs on the async runtime. New commands must do the same. A command that waits on the database lock now only delays its own result; the window stays responsive.
 - The import worker embeds a document before taking the lock.
 - The automatic-label passes (`automation.rs`) load the validated documents' embeddings once per pass instead of once per document and tag. The pass never validates a document, so the scores are unchanged.
+
+## 2026-09-25 — Pipelines wait for their turn instead of failing
+
+**Question:** In the GUI, an import, a search batch, "retrieve now" or a bulk retrieval failed with "another import or retrieval pipeline is already running" whenever another one held `import.lock`, even another action of the same window. Retrieval jobs enqueued by the "after tagging" policies were never run by the GUI (`run_retrieval_jobs` had no caller). The next "retrieve now" click therefore retrieved the whole backlog and held the lock for minutes.
+
+**Decision (supersedes the error behaviour described under "2026-09-24 — M9 command-line mode: dispatch, lock and busy timeout"):**
+- `src-tauri/src/pipeline.rs`: GUI pipelines take a **turn per job**. A turn is a fair (FIFO) in-process mutex plus the `import.lock` file lock, polled every 250 ms while a command-line import holds it. Nothing fails because another pipeline is busy. Between two documents of a long import, a waiting "retrieve now" gets in. SPEC 5.4's "retrieval at lower priority than imports" is approximated: an import waits at most for one retrieval job.
+- Workers read the next job fresh on each turn and skip jobs processed earlier in the same run. Two pipelines draining the same queue therefore never run a job twice, and jobs queued during a run are picked up by it.
+- "Retrieve now" and bulk retrieval process only their own documents.
+- After-tagging retrieval runs in the background (`pipeline::spawn_retrieval`) after imports, validations, per-tag review labels, enabling automatic mode, and at startup. At most one background run exists at a time; it continues until no retrieval job is left.
+- The command line waits for the lock (printing "waiting for the running import or retrieval to finish…") instead of failing. It then holds the lock for its whole run, as before.

@@ -247,7 +247,7 @@ patent-tagger status
 - `export` writes the documents carrying a tag: a folder named after the tag with one folder per document inside (`txt`, the default), or a single CSV or JSON file.
 - `status` prints the data folder, document counts per review state, and pending or failed jobs.
 
-The application can stay open during a scheduled import: you can keep reviewing. Only one import or retrieval runs at a time, so starting another from the window meanwhile reports "pipeline already running".
+The application can stay open during a scheduled import: you can keep reviewing. Imports and retrievals take turns, one document at a time: an action started from the window meanwhile waits for its turn, and a scheduled import waits for the window's current document. Full text and drawings due under your retrieval policies are retrieved in the background after imports and validations.
 
 ## 11. Known limitations
 

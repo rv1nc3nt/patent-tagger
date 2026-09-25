@@ -239,6 +239,7 @@ fn score_for(
 /// out-of-sample and is not recorded.
 #[tauri::command(async)]
 pub fn label_single_tag(
+    app: tauri::AppHandle,
     state: State<Db>,
     model: State<Model>,
     doc_id: i64,
@@ -247,7 +248,9 @@ pub fn label_single_tag(
 ) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = crate::commands::current_timestamp();
-    label_one(&conn, &model.0, doc_id, tag_id, positive, &now)
+    label_one(&conn, &model.0, doc_id, tag_id, positive, &now)?;
+    crate::pipeline::spawn_retrieval(&app);
+    Ok(())
 }
 
 fn label_one(

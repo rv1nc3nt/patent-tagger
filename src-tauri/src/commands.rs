@@ -2,6 +2,7 @@
 
 use crate::db::Db;
 use crate::model::Model;
+use crate::pipeline::Pipeline;
 use core_lib::rusqlite::Connection;
 use core_lib::tags::TagRow;
 use core_lib::{documents, jobs, labels, number, tags};
@@ -61,20 +62,22 @@ pub async fn run_import_jobs(
     app: tauri::AppHandle,
     state: State<'_, Db>,
     model: State<'_, Model>,
+    pipeline: State<'_, Pipeline>,
 ) -> Result<Vec<crate::import_worker::DocumentOutcome>, String> {
     use tauri::Emitter;
 
-    // SPEC 7.7: refuse to run alongside a scheduled command-line import.
-    // Every command that drains the job queue takes the same lock.
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
+    // SPEC 7.7: one job at a time across the GUI's pipelines and a
+    // scheduled command-line import; each job waits for its turn.
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
     let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    let outcomes = crate::import_worker::run(&state.conn, &client, &model.0, |outcome| {
-        let _ = app.emit("import-progress", outcome);
-    })
-    .await;
+    let outcomes =
+        crate::import_worker::run(&state.conn, &client, &model.0, Some(&pipeline), |outcome| {
+            let _ = app.emit("import-progress", outcome);
+        })
+        .await
+        .map_err(|e| format!("{e:#}"))?;
 
     // Newly fetched documents may already qualify for an automatic
     // decision under a tag that's already in automatic mode (SPEC 7.5),
@@ -84,6 +87,7 @@ pub async fn run_import_jobs(
         crate::automation::apply_full_automation(&conn, &model.0, &current_timestamp())
             .map_err(|e| e.to_string())?;
     }
+    crate::pipeline::spawn_retrieval(&app);
     Ok(outcomes)
 }
 
@@ -154,6 +158,7 @@ pub(crate) fn import_numbers_into(
 /// threshold is set to the just-calibrated value and auto mode turns on.
 #[tauri::command(async)]
 pub fn enable_automatic_mode(
+    app: tauri::AppHandle,
     state: State<Db>,
     model: State<Model>,
     tag_id: i64,
@@ -178,6 +183,7 @@ pub fn enable_automatic_mode(
 
     crate::automation::apply_full_automation(&conn, &model.0, &current_timestamp())
         .map_err(|e| e.to_string())?;
+    crate::pipeline::spawn_retrieval(&app);
 
     tags::get(&conn, tag_id)
         .map_err(|e| e.to_string())?
@@ -246,6 +252,7 @@ pub struct ValidateResult {
 /// this very document.
 #[tauri::command(async)]
 pub fn validate_document(
+    app: tauri::AppHandle,
     state: State<Db>,
     model: State<Model>,
     doc_id: i64,
@@ -315,6 +322,7 @@ pub fn validate_document(
             .map_err(|e| e.to_string())?;
     }
 
+    crate::pipeline::spawn_retrieval(&app);
     Ok(ValidateResult { auto_disabled_tags })
 }
 
@@ -364,54 +372,76 @@ pub(crate) fn enqueue_retrieval_after_tagging(
     Ok(())
 }
 
-/// Drains any pending `fulltext_retrieval`/`drawings_retrieval` jobs (SPEC
-/// 5.5) - both the ones enqueued by `enqueue_retrieval_after_tagging` and
-/// any left over from an interrupted previous run. Lower priority than
-/// imports (SPEC 5.4): callers run `run_import_jobs` first.
+/// Starts retrieving any pending `fulltext_retrieval`/`drawings_retrieval`
+/// jobs (SPEC 5.5) in the background, and returns at once. The backend
+/// already does this after imports and validations; see
+/// [`crate::pipeline::spawn_retrieval`].
 #[tauri::command]
-pub async fn run_retrieval_jobs(state: State<'_, Db>) -> Result<(), String> {
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
-    let creds = crate::platform::credentials::load(&state.data_dir)
-        .map_err(|e| e.to_string())?
-        .ok_or("no OPS credentials saved yet")?;
-    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await;
-    crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await;
-    Ok(())
+pub fn run_retrieval_jobs(app: tauri::AppHandle) {
+    crate::pipeline::spawn_retrieval(&app);
 }
 
 /// The Description/Claims tabs' and Drawings tab's "retrieve now" button
-/// (SPEC section 8), for the "on demand" retrieval policy.
+/// (SPEC section 8), for the "on demand" retrieval policy. Retrieves this
+/// document only, waiting for its turn behind a running job.
 #[tauri::command]
-pub async fn retrieve_fulltext_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
+pub async fn retrieve_fulltext_now(
+    state: State<'_, Db>,
+    pipeline: State<'_, Pipeline>,
+    doc_id: i64,
+) -> Result<(), String> {
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
         crate::retrieval_worker::enqueue_fulltext(&conn, doc_id, &current_timestamp())
             .map_err(|e| e.to_string())?;
     }
-    let creds = crate::platform::credentials::load(&state.data_dir)
-        .map_err(|e| e.to_string())?
-        .ok_or("no OPS credentials saved yet")?;
-    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    crate::retrieval_worker::run_fulltext(&state.conn, &client, |_| {}).await;
+    let client = ops_client(&state)?;
+    crate::retrieval_worker::run_fulltext(
+        &state.conn,
+        &client,
+        Some(&pipeline),
+        Some(&[doc_id]),
+        |_| {},
+    )
+    .await
+    .map_err(|e| format!("{e:#}"))?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<(), String> {
-    let _lock = crate::lock::PipelineLock::acquire(&state.data_dir).map_err(|e| e.to_string())?;
+pub async fn retrieve_drawings_now(
+    state: State<'_, Db>,
+    pipeline: State<'_, Pipeline>,
+    doc_id: i64,
+) -> Result<(), String> {
     {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
         crate::retrieval_worker::enqueue_drawings(&conn, doc_id, &current_timestamp())
             .map_err(|e| e.to_string())?;
     }
+    let client = ops_client(&state)?;
+    crate::retrieval_worker::run_drawings(
+        &state.conn,
+        &client,
+        &state.data_dir,
+        Some(&pipeline),
+        Some(&[doc_id]),
+        |_| {},
+    )
+    .await
+    .map_err(|e| format!("{e:#}"))?;
+    Ok(())
+}
+
+/// An OPS client with the saved credentials.
+pub(crate) fn ops_client(state: &Db) -> Result<ops_lib::client::OpsClient, String> {
     let creds = crate::platform::credentials::load(&state.data_dir)
         .map_err(|e| e.to_string())?
         .ok_or("no OPS credentials saved yet")?;
-    let client = ops_lib::client::OpsClient::new(creds.consumer_key, creds.consumer_secret);
-    crate::retrieval_worker::run_drawings(&state.conn, &client, &state.data_dir, |_| {}).await;
-    Ok(())
+    Ok(ops_lib::client::OpsClient::new(
+        creds.consumer_key,
+        creds.consumer_secret,
+    ))
 }
 
 /// The Drawings tab's page images (SPEC section 8): `page` is 1-based for

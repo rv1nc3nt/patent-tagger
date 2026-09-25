@@ -43,22 +43,33 @@ pub fn enqueue_drawings(conn: &Connection, doc_id: i64, now: &str) -> Result<(),
     Ok(())
 }
 
+/// Retrieves full text for every pending job, or only for `only`'s
+/// documents, one job per pipeline turn when `pipeline` is given (the GUI;
+/// the command line holds the lock for its whole run). Jobs queued while
+/// it runs are picked up too. Returns the number of jobs processed.
 pub async fn run_fulltext(
     conn_mutex: &std::sync::Mutex<Connection>,
     client: &OpsClient,
+    pipeline: Option<&crate::pipeline::Pipeline>,
+    only: Option<&[i64]>,
     mut on_progress: impl FnMut(i64),
-) {
-    let pending = {
-        let conn = conn_mutex.lock().expect("db mutex poisoned");
-        jobs::list_resumable(&conn, FULLTEXT_JOB_KIND).unwrap_or_default()
-    };
-    for job in pending {
+) -> anyhow::Result<usize> {
+    let mut processed = BTreeSet::new();
+    loop {
+        let _turn = match pipeline {
+            Some(p) => Some(p.turn().await?),
+            None => None,
+        };
+        let Some((job, payload)) = next_job(conn_mutex, FULLTEXT_JOB_KIND, only, &processed) else {
+            return Ok(processed.len());
+        };
+        processed.insert(job.id);
         let now = now_iso8601();
         {
             let conn = conn_mutex.lock().expect("db mutex poisoned");
             let _ = jobs::mark_running(&conn, job.id, &now);
         }
-        let Ok(payload) = serde_json::from_str::<RetrievalPayload>(&job.payload) else {
+        let Some(payload) = payload else {
             let conn = conn_mutex.lock().expect("db mutex poisoned");
             let _ = jobs::mark_failed(&conn, job.id, "bad job payload", &now);
             continue;
@@ -81,23 +92,57 @@ pub async fn run_fulltext(
     }
 }
 
+/// The oldest resumable job of `kind` not yet `processed` in this run,
+/// restricted to `only`'s documents when given, with its parsed payload
+/// (`None` when unreadable). Read fresh on each turn, so a job another
+/// pipeline finished meanwhile is not run twice.
+fn next_job(
+    conn_mutex: &std::sync::Mutex<Connection>,
+    kind: &str,
+    only: Option<&[i64]>,
+    processed: &BTreeSet<i64>,
+) -> Option<(jobs::JobRow, Option<RetrievalPayload>)> {
+    let conn = conn_mutex.lock().expect("db mutex poisoned");
+    jobs::list_resumable(&conn, kind)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|job| !processed.contains(&job.id))
+        .map(|job| {
+            let payload = serde_json::from_str::<RetrievalPayload>(&job.payload).ok();
+            (job, payload)
+        })
+        .find(|(_, payload)| match (only, payload) {
+            (None, _) => true,
+            (Some(ids), Some(p)) => ids.contains(&p.doc_id),
+            (Some(_), None) => false,
+        })
+}
+
+/// Like [`run_fulltext`], for drawings.
 pub async fn run_drawings(
     conn_mutex: &std::sync::Mutex<Connection>,
     client: &OpsClient,
     data_dir: &Path,
+    pipeline: Option<&crate::pipeline::Pipeline>,
+    only: Option<&[i64]>,
     mut on_progress: impl FnMut(i64),
-) {
-    let pending = {
-        let conn = conn_mutex.lock().expect("db mutex poisoned");
-        jobs::list_resumable(&conn, DRAWINGS_JOB_KIND).unwrap_or_default()
-    };
-    for job in pending {
+) -> anyhow::Result<usize> {
+    let mut processed = BTreeSet::new();
+    loop {
+        let _turn = match pipeline {
+            Some(p) => Some(p.turn().await?),
+            None => None,
+        };
+        let Some((job, payload)) = next_job(conn_mutex, DRAWINGS_JOB_KIND, only, &processed) else {
+            return Ok(processed.len());
+        };
+        processed.insert(job.id);
         let now = now_iso8601();
         {
             let conn = conn_mutex.lock().expect("db mutex poisoned");
             let _ = jobs::mark_running(&conn, job.id, &now);
         }
-        let Ok(payload) = serde_json::from_str::<RetrievalPayload>(&job.payload) else {
+        let Some(payload) = payload else {
             let conn = conn_mutex.lock().expect("db mutex poisoned");
             let _ = jobs::mark_failed(&conn, job.id, "bad job payload", &now);
             continue;

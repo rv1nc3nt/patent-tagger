@@ -35,21 +35,39 @@ pub struct DocumentOutcome {
 /// Tauri event) and from tests (which can just collect into a `Vec`, or
 /// pass `|_| {}` to ignore it). Safe to call repeatedly: jobs left in
 /// `running` from an earlier, incomplete pass are picked up again, per
-/// SPEC 5.4.
+/// SPEC 5.4. With a `pipeline` (the GUI), each job is one pipeline turn,
+/// so other pipelines get in between documents; the command line holds the
+/// lock for its whole run instead. Jobs queued while it runs are picked up
+/// too.
 pub async fn run(
     conn_mutex: &std::sync::Mutex<Connection>,
     client: &OpsClient,
     embedder: &impl Embedder,
+    pipeline: Option<&crate::pipeline::Pipeline>,
     mut on_progress: impl FnMut(&DocumentOutcome),
-) -> Vec<DocumentOutcome> {
-    let pending = {
-        let conn = conn_mutex.lock().expect("db mutex poisoned");
-        jobs::list_resumable(&conn, "import_document").unwrap_or_default()
-    };
+) -> anyhow::Result<Vec<DocumentOutcome>> {
+    let mut results = Vec::new();
+    let mut processed = std::collections::BTreeSet::new();
 
-    let mut results = Vec::with_capacity(pending.len());
+    loop {
+        let _turn = match pipeline {
+            Some(p) => Some(p.turn().await?),
+            None => None,
+        };
+        // Read fresh on each turn, so a job another pipeline finished
+        // meanwhile is not run twice.
+        let job = {
+            let conn = conn_mutex.lock().expect("db mutex poisoned");
+            jobs::list_resumable(&conn, "import_document")
+                .unwrap_or_default()
+                .into_iter()
+                .find(|job| !processed.contains(&job.id))
+        };
+        let Some(job) = job else {
+            return Ok(results);
+        };
+        processed.insert(job.id);
 
-    for job in pending {
         let now = now_iso8601();
         {
             let conn = conn_mutex.lock().expect("db mutex poisoned");
@@ -80,8 +98,6 @@ pub async fn run(
         on_progress(&outcome);
         results.push(outcome);
     }
-
-    results
 }
 
 async fn process_one(
