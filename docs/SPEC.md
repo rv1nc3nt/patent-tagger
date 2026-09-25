@@ -94,6 +94,7 @@ drawings(
   doc_id, page INTEGER, source TEXT,   -- docdb id of the publication the drawings came from
   path TEXT NOT NULL,                  -- relative to the data directory, e.g. drawings/EP1234567/001.png
   width INTEGER, height INTEGER, fetched_at TEXT,
+  rotation INTEGER NOT NULL DEFAULT 0, -- degrees clockwise set in the View screen: 0 | 90 | 180 | 270
   PRIMARY KEY (doc_id, page)
 )
 drawings_status(doc_id PRIMARY KEY, status TEXT NOT NULL, page_count INTEGER, source TEXT, updated_at TEXT)
@@ -391,9 +392,10 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
 **View**
 - Reading one document: opened from a picker (publication number or title), or with "View" from the Review and Library screens. The last document opened stays open while other tabs are shown.
 - **Outline** (left): metadata, abstract, description headings with a "go to paragraph" box, every claim (independent claims in bold, dependent claims indented), drawings. Clicking an entry scrolls to it.
-- **Content** (centre): metadata, abstract, description, claims and drawings on one scrolling page, each with its source publication. A reference such as "claim 4" inside a claim links to that claim. "Retrieve now" buttons when full text or drawings are missing.
+- **Content** (centre): metadata, abstract, description, claims and drawings on one scrolling page, each with its source publication. The Drawings section lists the pages, each opening in the Figures panel. A reference such as "claim 4" inside a claim links to that claim. "Retrieve now" buttons when full text or drawings are missing.
+- **Right panel**, resizable by its left edge, with two tabs. **Figures** (the default when the document has drawings): one page at a time fitted to the panel, previous/next (`[`/`]`), zoom, a thumbnail strip, and rotation by quarter turns (`R` clockwise, `Shift+R` anticlockwise). A page's rotation is saved and also applies in the Review screen's drawings; the stored PNG and the export are not changed. It is kept when the same publication's drawings are retrieved again, and reset when the page comes from another publication. **Highlights**: the list described below.
 - **Find** (`Ctrl+F` or `/`): matches in the whole document or one section are marked, with a count; `Enter`/`Shift+Enter` (or `F3`) move between them.
-- **Highlights:** selecting text in one section offers four colours and "Comment…"; `H` highlights with the last colour, `C` highlights and opens the comment. Clicking a highlight edits its colour and comment, or deletes it. The right pane lists the document's highlights in reading order; clicking one scrolls to it.
+- **Highlights:** selecting text in one section offers four colours and "Comment…"; `H` highlights with the last colour, `C` highlights and opens the comment. Clicking a highlight edits its colour and comment, or deletes it. The Highlights tab lists the document's highlights in reading order; clicking one scrolls to it.
 - A highlight stores its quote. When the stored text changes (full text retrieved again), it follows its quote to the nearest occurrence; when the quote is gone it is listed as "no longer in the text" and not drawn.
 
 **Library**

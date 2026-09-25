@@ -332,3 +332,13 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - **Export:** the document `.txt` gets a `HIGHLIGHTS` section after `DRAWINGS`, only when the document has highlights, so exports of documents without highlights are unchanged (the reference file still matches). Each line gives the location (`Claim 1`, `Description [0012]`), colour and quote, then the comment. The full JSON export gains a `highlights` array per document; the CSV is unchanged. Backups include the table as part of the database.
 - **Headings in full text:** `ops::fulltext::parse_description` now keeps `<heading>` elements on their own lines, as SPEC 5.5 requires; it only read `<p>`. **Not verified against a live response:** no recorded fixture has a heading (EP1000000 has none), so the element name follows the EPO full-text DTD and the test uses synthetic XML. Texts already stored keep their current form until retrieved again.
 - **Bug found on the way:** `text_content` in `ops::fulltext` collected an element's `text()` (its first text child) as well as its text nodes, so every stored description paragraph and claim was doubled. The existing tests only checked `starts_with`/`contains`. Fixed, with a regression test on the recorded fixture. Full texts retrieved before the fix stay doubled in the database until re-parsed or retrieved again.
+
+## 2026-09-25 — Figures panel with saved rotation (user request)
+
+**Question:** The user asked for the View screen's figures to be shown in a right panel, and to be able to rotate them.
+
+**Decisions (user-approved; SPEC 4.2 and 8 updated):**
+- **Layout:** the right panel has two tabs, *Figures* and *Highlights*. Figures opens by default when the document has drawings. The panel is resizable by dragging its left edge (260 px to 60 % of the window). The Drawings section of the page lists the pages as buttons that open them in the panel.
+- **Rotation is saved per page:** new column `drawings.rotation` (migration `004_drawing_rotation.sql`), degrees clockwise in quarter turns, set through `core::drawings::set_rotation`. It is display-only: the PNG file, `width`/`height` and the document export are unchanged. Review's drawings show the saved rotation and their zoomed view has rotate buttons too.
+- **Re-retrieval:** `insert_page` keeps the rotation when the page comes from the same source publication, and resets it to 0 when the source changes, since the image may differ.
+- **Keys** in the View screen: `R` / `Shift+R` rotate the shown page, `[` / `]` change page, while the Figures tab is open and no text field has focus.

@@ -170,8 +170,9 @@ Full text is taken in English where it exists, from the same publication, its ap
 The **View** tab shows one document on a single page: metadata, abstract, description, claims and drawings. Open a document by typing its number or part of its title in the box at the top, or with **Open in View** (Review) or **view** (Library). The document stays open when you switch tabs.
 
 - **Outline** (left): jump to a section, a description heading, a paragraph number (type `12` in the ¶ box), or a claim. Independent claims are in bold; dependent claims are indented. In the claims, a reference such as "claim 4" is a link.
+- **Figures** (right panel): the drawings, one page at a time. Use ‹ › or `[` `]` to change page, − and + to zoom (click the percentage to fit the panel again), and ↺ ↻ or `R` / `Shift+R` to turn a page that was scanned sideways. The rotation is remembered for that page, also in the Review tab. Drag the panel's left edge to make it wider. The **Highlights** tab next to it lists your highlights.
 - **Find**: `Ctrl+F` or `/`, then type at least two characters. Choose *Everywhere* or one section. `Enter` goes to the next match, `Shift+Enter` to the previous one, `Esc` clears.
-- **Highlights**: select some text, then click a colour, or press `H` to highlight with the last colour, or `C` to highlight and add a comment. Click a highlight to change its colour or comment, or delete it. The right pane lists every highlight; click one to go to it.
+- **Highlights**: select some text, then click a colour, or press `H` to highlight with the last colour, or `C` to highlight and add a comment. Click a highlight to change its colour or comment, or delete it. The **Highlights** tab lists every highlight; click one to go to it.
 
 If the full text is retrieved again and a highlighted passage has changed, the highlight moves to the same words when it can find them. Otherwise it stays in the list, marked "passage no longer in the text".
 
