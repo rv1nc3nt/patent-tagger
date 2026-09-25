@@ -18,6 +18,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
     Migrations::new(vec![
         M::up(include_str!("schema.sql")),
         M::up(include_str!("002_saved_searches.sql")),
+        M::up(include_str!("003_annotations.sql")),
     ])
 });
 
@@ -93,6 +94,7 @@ mod tests {
             "jobs",
             "settings",
             "saved_searches",
+            "annotations",
         ] {
             assert!(
                 tables.iter().any(|t| t == expected),

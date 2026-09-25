@@ -1,5 +1,6 @@
 //! Domain types, SQLite storage and learning. No Tauri, no network.
 
+pub mod annotations;
 pub mod audit;
 pub mod classifier;
 pub mod documents;
@@ -12,6 +13,7 @@ pub mod jobs;
 pub mod labels;
 pub mod library;
 pub mod number;
+pub mod outline;
 pub mod predictions;
 pub mod retrieval_policy;
 pub mod scoring;

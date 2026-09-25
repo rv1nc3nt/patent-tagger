@@ -39,6 +39,45 @@ pub struct DocumentDetail {
     pub family_id: Option<String>,
 }
 
+/// Documents for the View screen's picker, newest import first. A
+/// non-empty `query` matches the publication number (ignoring spaces,
+/// dots and slashes, so `EP 1 000 000` finds `EP1000000`) or the title.
+/// Publications OPS did not find have nothing to show and are left out.
+pub fn find(conn: &Connection, query: &str, limit: usize) -> Result<Vec<QueueEntry>, StorageError> {
+    let escape = |s: &str| {
+        s.replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    };
+    let compact: String = query
+        .chars()
+        .filter(|c| !matches!(c, ' ' | '.' | '/' | ','))
+        .collect::<String>()
+        .to_uppercase();
+    let key_pattern = format!("%{}%", escape(&compact));
+    let title_pattern = format!("%{}%", escape(query.trim()));
+    let mut stmt = conn.prepare(
+        "SELECT id, pub_key, title FROM documents
+         WHERE fetch_status != 'not_found'
+           AND (?1 = '' OR pub_key LIKE ?2 ESCAPE '\\' OR title LIKE ?3 ESCAPE '\\')
+         ORDER BY pub_key = ?1 DESC, id DESC
+         LIMIT ?4",
+    )?;
+    let rows = stmt
+        .query_map(
+            params![compact, key_pattern, title_pattern, limit as i64],
+            |row| {
+                Ok(QueueEntry {
+                    id: row.get(0)?,
+                    pub_key: row.get(1)?,
+                    title: row.get(2)?,
+                })
+            },
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 /// Documents ready for review (SPEC section 8): fetched (title+abstract,
 /// and therefore an embedding) and not yet validated/skipped, in import
 /// order (M4's only ordering option - see docs/DECISIONS.md).
@@ -263,6 +302,45 @@ fn row_to_document(row: &rusqlite::Row) -> rusqlite::Result<DocumentRow> {
 mod tests {
     use super::*;
     use crate::storage;
+
+    #[test]
+    fn find_matches_number_or_title_newest_first() {
+        let conn = storage::open_in_memory().unwrap();
+        let now = "2026-09-25T00:00:00Z";
+        for (key, title) in [
+            ("EP1000000", "Brick press"),
+            ("EP1000001", "Clay mould"),
+            ("US5960411", "100% brick"),
+        ] {
+            insert_pending(&conn, key, key, now).unwrap();
+            conn.execute(
+                "UPDATE documents SET title = ?2, fetch_status = 'fetched' WHERE pub_key = ?1",
+                params![key, title],
+            )
+            .unwrap();
+        }
+        insert_pending(&conn, "EP9999999", "EP9999999", now).unwrap();
+        conn.execute(
+            "UPDATE documents SET fetch_status = 'not_found' WHERE pub_key = 'EP9999999'",
+            [],
+        )
+        .unwrap();
+
+        let keys = |q: &str| -> Vec<String> {
+            find(&conn, q, 10)
+                .unwrap()
+                .into_iter()
+                .map(|d| d.pub_key)
+                .collect()
+        };
+        assert_eq!(keys(""), ["US5960411", "EP1000001", "EP1000000"]);
+        assert_eq!(keys("ep 1 000 000"), ["EP1000000"]);
+        assert_eq!(keys("ep 100000"), ["EP1000001", "EP1000000"]);
+        assert_eq!(keys("brick"), ["US5960411", "EP1000000"]);
+        assert_eq!(keys("100%"), ["US5960411"]);
+        assert!(keys("EP9999999").is_empty());
+        assert_eq!(find(&conn, "", 1).unwrap().len(), 1);
+    }
 
     #[test]
     fn queue_only_includes_fetched_and_queued_documents_in_import_order() {
