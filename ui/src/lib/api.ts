@@ -476,3 +476,49 @@ export function exportTagList(tagId: number, destPath: string): Promise<void> {
 export function exportDocuments(docIds: number[], destDir: string): Promise<number> {
   return invoke("export_documents", { docIds, destDir });
 }
+
+export type JobKind = "import_document" | "fulltext_retrieval" | "drawings_retrieval";
+
+export interface JobCounts {
+  kind: JobKind;
+  pending: number;
+  running: number;
+  failed: number;
+}
+
+export interface JobDetail {
+  id: number;
+  kind: JobKind;
+  state: string;
+  doc_id: number | null;
+  pub_key: string | null;
+  attempts: number;
+  last_error: string | null;
+  updated_at: string;
+}
+
+export interface JobOverview {
+  counts: JobCounts[];
+  active_total: number;
+  failed_total: number;
+  running: JobDetail[];
+  failed: JobDetail[];
+  import_running: boolean;
+  retrieval_running: boolean;
+}
+
+export function jobOverview(): Promise<JobOverview> {
+  return invoke("job_overview");
+}
+
+export function retryJob(jobId: number): Promise<void> {
+  return invoke("retry_job", { jobId });
+}
+
+export function retryFailedJobs(kind: JobKind): Promise<number> {
+  return invoke("retry_failed_jobs", { kind });
+}
+
+export function cancelPendingJobs(kind: JobKind): Promise<number> {
+  return invoke("cancel_pending_jobs", { kind });
+}

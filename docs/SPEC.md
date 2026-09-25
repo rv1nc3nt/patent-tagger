@@ -395,6 +395,9 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
 - Full-automation readiness indicator (section 7.6) and counts of auto-completed, audited and focused-review documents.
 - OPS quota usage, as reported by the response headers.
 
+**Jobs**
+- The persistent job queue: pending, running and failed counts per kind (import, full text, drawings), what is running now, and the failed jobs with their document and error. Retry one or all failed jobs of a kind; cancel pending retrievals. The tab label shows the number of pending jobs.
+
 **Settings**
 - OPS credentials and connection test.
 - Target precision, target recall, audit rates, full-automation switch.

@@ -4,6 +4,7 @@ pub mod cli;
 mod commands;
 mod db;
 mod import_worker;
+mod jobs_screen;
 mod library;
 mod lock;
 mod model;
@@ -80,6 +81,10 @@ pub fn run() {
             search::delete_search,
             search::restart_search,
             search::fetch_search_batch,
+            jobs_screen::job_overview,
+            jobs_screen::retry_job,
+            jobs_screen::retry_failed_jobs,
+            jobs_screen::cancel_pending_jobs,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

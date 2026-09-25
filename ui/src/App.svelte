@@ -1,12 +1,14 @@
 <script lang="ts">
+  import { jobOverview, type JobOverview } from "./lib/api";
   import ImportScreen from "./lib/ImportScreen.svelte";
+  import JobsScreen from "./lib/JobsScreen.svelte";
   import LibraryScreen from "./lib/LibraryScreen.svelte";
   import MetricsScreen from "./lib/MetricsScreen.svelte";
   import ReviewScreen from "./lib/ReviewScreen.svelte";
   import SettingsScreen from "./lib/SettingsScreen.svelte";
   import TagsScreen from "./lib/TagsScreen.svelte";
 
-  type View = "import" | "review" | "tags" | "metrics" | "library" | "settings";
+  type View = "import" | "review" | "tags" | "metrics" | "library" | "jobs" | "settings";
   let view = $state<View>("import");
 
   const tabs: { id: View; label: string }[] = [
@@ -15,14 +17,42 @@
     { id: "tags", label: "Tags" },
     { id: "metrics", label: "Metrics" },
     { id: "library", label: "Library" },
+    { id: "jobs", label: "Jobs" },
     { id: "settings", label: "Settings" },
   ];
+
+  // Job queue state, polled for the Jobs tab's label and screen: every 2 s
+  // while the Jobs screen is open, every 5 s otherwise.
+  let jobs = $state<JobOverview | null>(null);
+
+  async function refreshJobs() {
+    try {
+      jobs = await jobOverview();
+    } catch {
+      // Keep the last known state; the Jobs screen shows command errors.
+    }
+  }
+
+  $effect(() => {
+    const interval = view === "jobs" ? 2000 : 5000;
+    refreshJobs();
+    const timer = setInterval(refreshJobs, interval);
+    return () => clearInterval(timer);
+  });
+
+  function tabLabel(id: View, label: string): string {
+    if (id !== "jobs" || !jobs) return label;
+    const parts = [];
+    if (jobs.active_total > 0) parts.push(String(jobs.active_total));
+    if (jobs.failed_total > 0) parts.push(`${jobs.failed_total} failed`);
+    return parts.length > 0 ? `${label} (${parts.join(", ")})` : label;
+  }
 </script>
 
 <main>
   <nav class="tabs">
     {#each tabs as tab (tab.id)}
-      <button class:active={view === tab.id} onclick={() => (view = tab.id)}>{tab.label}</button>
+      <button class:active={view === tab.id} onclick={() => (view = tab.id)}>{tabLabel(tab.id, tab.label)}</button>
     {/each}
   </nav>
 
@@ -36,6 +66,8 @@
     <MetricsScreen />
   {:else if view === "library"}
     <LibraryScreen />
+  {:else if view === "jobs"}
+    <JobsScreen overview={jobs} refresh={refreshJobs} />
   {:else}
     <SettingsScreen />
   {/if}

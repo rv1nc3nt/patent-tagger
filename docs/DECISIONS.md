@@ -310,3 +310,12 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - "Retrieve now" and bulk retrieval process only their own documents.
 - After-tagging retrieval runs in the background (`pipeline::spawn_retrieval`) after imports, validations, per-tag review labels, enabling automatic mode, and at startup. At most one background run exists at a time; it continues until no retrieval job is left.
 - The command line waits for the lock (printing "waiting for the running import or retrieval to finish…") instead of failing. It then holds the lock for its whole run, as before.
+
+## 2026-09-25 — Jobs screen (user request)
+
+**Question:** The user asked for a way to see the job queue. Until now only `patent-tagger status` printed counts, and the Import screen listed the failed documents of the current import.
+
+**Decisions (SPEC 8 updated):**
+- A **Jobs** tab shows pending, running and failed counts per kind, what is running now, and up to 200 failed jobs with their document (from the payload's `doc_id`) and error. The UI polls `job_overview` every 5 s, or every 2 s while the tab is open. The tab label shows pending and failed totals.
+- **Retry** and **Retry all failed** reset failed jobs to pending and start a background run: `pipeline::spawn_retrieval`, or the new `pipeline::spawn_import` for imports. A background import emits the same `import-progress` events and then runs automation and retrieval, as an import from the Import screen does.
+- **Cancel pending** deletes pending (not running) retrieval jobs; their documents stay "not retrieved". Pending imports cannot be cancelled, because their documents would stay half-imported.

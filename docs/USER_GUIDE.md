@@ -2,7 +2,7 @@
 
 Patent Tagger imports patents from a list of publication numbers, fetches their bibliographic data and English abstract from EPO Open Patent Services (OPS), and helps you tag them. It learns from every document you validate and suggests tags for new ones. Tag by tag, once its measured precision is good enough, it can take over completely.
 
-The application has six tabs: **Import**, **Review**, **Tags**, **Metrics**, **Library** and **Settings**. A typical first session goes: enter OPS credentials in Settings, create a few tags, import numbers, then review.
+The application has seven tabs: **Import**, **Review**, **Tags**, **Metrics**, **Library**, **Jobs** and **Settings**. A typical first session goes: enter OPS credentials in Settings, create a few tags, import numbers, then review.
 
 ## 1. First steps
 
@@ -176,6 +176,13 @@ Exports:
 - **Export selected…**: one folder per tag, holding one folder per ticked document carrying that tag. A document with several tags is copied into each tag's folder; ticked documents without tags go into `_untagged`. Characters not allowed in folder names (such as `/` or `:`) become `_`. Each document folder holds a `.txt` file with the bibliographic data, tags, sources, abstract, description and claims, plus the drawings as PNG files. Missing parts are stated in the file.
 
 Tick documents to **Retrieve full text for selected** or **Retrieve drawings for selected**.
+
+### Jobs
+
+Imports and retrievals run as jobs, which survive closing the application. The **Jobs** tab shows how many are pending, running and failed for imports, full text and drawings, and what is being processed now. Its label shows the number of pending jobs, and failed ones, from any screen.
+
+- **Retry** puts a failed job back in the queue; **Retry all failed** does it for a whole kind. Processing starts at once.
+- **Cancel pending** removes the pending full-text or drawings retrievals, e.g. to save OPS quota. Those documents stay "not retrieved"; you can still retrieve them later with "retrieve now" or from the Library. Pending imports cannot be cancelled.
 
 ## 9. Backup and sharing tags
 

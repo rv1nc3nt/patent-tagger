@@ -18,6 +18,8 @@ pub struct Pipeline {
     data_dir: PathBuf,
     /// A background retrieval run is going (see [`spawn_retrieval`]).
     retrieval_running: AtomicBool,
+    /// A background import run is going (see [`spawn_import`]).
+    import_running: AtomicBool,
 }
 
 /// One job's worth of exclusive access. Released on drop.
@@ -32,7 +34,16 @@ impl Pipeline {
             turns: tokio::sync::Mutex::new(()),
             data_dir,
             retrieval_running: AtomicBool::new(false),
+            import_running: AtomicBool::new(false),
         }
+    }
+
+    pub fn retrieval_running(&self) -> bool {
+        self.retrieval_running.load(Ordering::SeqCst)
+    }
+
+    pub fn import_running(&self) -> bool {
+        self.import_running.load(Ordering::SeqCst)
     }
 
     /// Waits for the other GUI pipelines, then for a command-line import
@@ -103,6 +114,58 @@ pub fn spawn_retrieval(app: &AppHandle) {
             Err(e) => log::warn!("background retrieval: loading OPS credentials: {e:#}"),
         }
         pipeline.retrieval_running.store(false, Ordering::SeqCst);
+    });
+}
+
+/// Runs pending import jobs in the background, e.g. after the Jobs
+/// screen's retry, then automation and retrieval as after an import from
+/// the Import screen. Progress goes to the same `import-progress` event.
+/// Does nothing when a background import run is already going.
+pub fn spawn_import(app: &AppHandle) {
+    if app
+        .state::<Pipeline>()
+        .import_running
+        .swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        use tauri::Emitter;
+        let db = app.state::<Db>();
+        let pipeline = app.state::<Pipeline>();
+        let model = app.state::<crate::model::Model>();
+        match crate::commands::ops_client(&db) {
+            Ok(client) => {
+                let result = crate::import_worker::run(
+                    &db.conn,
+                    &client,
+                    &model.0,
+                    Some(&pipeline),
+                    |outcome| {
+                        let _ = app.emit("import-progress", outcome);
+                    },
+                )
+                .await;
+                if let Err(e) = result {
+                    log::warn!("background import stopped: {e:#}");
+                }
+                match db.conn.lock() {
+                    Ok(conn) => {
+                        let now = crate::commands::current_timestamp();
+                        if let Err(e) =
+                            crate::automation::apply_full_automation(&conn, &model.0, &now)
+                        {
+                            log::warn!("automation after background import: {e}");
+                        }
+                    }
+                    Err(_) => log::warn!("database mutex poisoned"),
+                }
+                spawn_retrieval(&app);
+            }
+            Err(e) => log::warn!("background import: {e}"),
+        }
+        pipeline.import_running.store(false, Ordering::SeqCst);
     });
 }
 
