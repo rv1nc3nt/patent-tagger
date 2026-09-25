@@ -184,6 +184,13 @@ export interface DrawingPage {
   width: number | null;
   height: number | null;
   fetched_at: string | null;
+  /// Degrees clockwise (0, 90, 180, 270) the page is displayed with.
+  /// `width`/`height` are those of the stored, unrotated image.
+  rotation: number;
+}
+
+export function setDrawingRotation(docId: number, page: number, rotation: number): Promise<void> {
+  return invoke("set_drawing_rotation", { docId, page, rotation });
 }
 
 export interface DocumentView extends DocumentDetail {

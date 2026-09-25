@@ -6,9 +6,11 @@
     reviewQueue,
     retrieveDrawingsNow,
     retrieveFulltextNow,
+    setDrawingRotation,
     skipDocument,
     validateDocument,
     type DocumentView,
+    type DrawingPage as DrawingPageRow,
     type QueueEntry,
     type QueueOrdering,
   } from "./api";
@@ -62,6 +64,16 @@
       error = String(err);
     } finally {
       retrievingDrawings = false;
+    }
+  }
+
+  async function handleRotate(page: DrawingPageRow, rotation: number) {
+    if (!doc) return;
+    try {
+      await setDrawingRotation(doc.id, page.page, rotation);
+      page.rotation = rotation;
+    } catch (err) {
+      error = String(err);
     }
   }
 
@@ -299,7 +311,14 @@
                 </p>
                 <div class="thumbnails">
                   {#each doc.drawing_pages.filter((p) => p.page >= 1) as page (page.page)}
-                    <DrawingPage docId={doc.id} page={page.page} />
+                    <DrawingPage
+                      docId={doc.id}
+                      page={page.page}
+                      rotation={page.rotation}
+                      naturalWidth={page.width}
+                      naturalHeight={page.height}
+                      onRotate={(r) => handleRotate(page, r)}
+                    />
                   {/each}
                 </div>
               {:else if doc.drawings_status?.status === "not_available"}

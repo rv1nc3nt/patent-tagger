@@ -1,11 +1,44 @@
 <script lang="ts">
   import { drawingPageUrl } from "./api";
+  import RotatedImage from "./RotatedImage.svelte";
 
-  let { docId, page, size = 140 }: { docId: number; page: number; size?: number } = $props();
+  let {
+    docId,
+    page,
+    size = 140,
+    rotation = 0,
+    naturalWidth = null,
+    naturalHeight = null,
+    onRotate,
+  }: {
+    docId: number;
+    page: number;
+    size?: number;
+    rotation?: number;
+    naturalWidth?: number | null;
+    naturalHeight?: number | null;
+    /// Given, the zoomed view has rotate buttons; called with the new rotation.
+    onRotate?: (rotation: number) => void;
+  } = $props();
 
   let url = $state<string | null>(null);
   let zoomed = $state(false);
   let zoom = $state(1);
+
+  // Width at which the whole turned page fits the zoomed view at zoom 1.
+  const fitWidth = $derived.by(() => {
+    const maxW = window.innerWidth * 0.85;
+    const maxH = window.innerHeight * 0.75;
+    if (!naturalWidth || !naturalHeight) return maxW;
+    const quarter = rotation % 180 !== 0;
+    const aspect = quarter ? naturalWidth / naturalHeight : naturalHeight / naturalWidth;
+    return Math.min(maxW, maxH / aspect);
+  });
+
+  function turn(delta: number, e: Event) {
+    e.stopPropagation();
+    onRotate?.((rotation + delta + 360) % 360);
+  }
 
   $effect(() => {
     let cancelled = false;
@@ -27,7 +60,7 @@
 
 {#if url}
   <button class="thumb" style:width="{size}px" style:height="{size}px" onclick={() => (zoomed = true)} aria-label="Zoom page {page}">
-    <img src={url} alt="Drawing page {page}" />
+    <img src={url} alt="Drawing page {page}" style:transform="rotate({rotation}deg)" />
     {#if page > 0}<span class="page-number">{page}</span>{/if}
   </button>
 {:else}
@@ -40,10 +73,21 @@
     <div class="lightbox-content">
       <div class="zoom-controls">
         <input type="range" min="0.5" max="4" step="0.1" bind:value={zoom} onclick={(e) => e.stopPropagation()} />
+        {#if onRotate}
+          <button onclick={(e) => turn(-90, e)} title="Rotate left">↺</button>
+          <button onclick={(e) => turn(90, e)} title="Rotate right">↻</button>
+        {/if}
         <button onclick={(e) => { e.stopPropagation(); zoomed = false; }}>Close</button>
       </div>
       <div class="zoom-viewport">
-        <img src={url} alt="Drawing page {page}, zoomed" style:transform="scale({zoom})" />
+        <RotatedImage
+          src={url}
+          alt="Drawing page {page}, zoomed"
+          {rotation}
+          width={fitWidth * zoom}
+          {naturalWidth}
+          {naturalHeight}
+        />
       </div>
     </div>
   </div>
@@ -109,10 +153,5 @@
     overflow: auto;
     max-width: 85vw;
     max-height: 80vh;
-  }
-  .zoom-viewport img {
-    display: block;
-    transform-origin: top left;
-    background: white;
   }
 </style>

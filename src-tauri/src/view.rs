@@ -128,3 +128,15 @@ pub fn delete_annotation(
     annotations::delete(&conn, id).map_err(|e| e.to_string())?;
     annotations::list(&conn, doc_id).map_err(|e| e.to_string())
 }
+
+/// Saves the rotation (degrees clockwise) the page is displayed with.
+#[tauri::command(async)]
+pub fn set_drawing_rotation(
+    state: State<Db>,
+    doc_id: i64,
+    page: i64,
+    rotation: i64,
+) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    core_lib::drawings::set_rotation(&conn, doc_id, page, rotation).map_err(|e| e.to_string())
+}

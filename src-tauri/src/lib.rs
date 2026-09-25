@@ -91,6 +91,7 @@ pub fn run() {
             view::create_annotation,
             view::update_annotation,
             view::delete_annotation,
+            view::set_drawing_rotation,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

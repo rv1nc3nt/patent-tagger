@@ -8,16 +8,18 @@
     HIGHLIGHT_COLORS,
     retrieveDrawingsNow,
     retrieveFulltextNow,
+    setDrawingRotation,
     updateAnnotation,
     viewDocument,
     type Annotation,
     type AnnotationSection,
     type Block,
+    type DrawingPage as DrawingPageRow,
     type HighlightColor,
     type QueueEntry,
     type ViewDocument,
   } from "./api";
-  import DrawingPage from "./DrawingPage.svelte";
+  import FigurePanel from "./FigurePanel.svelte";
   import { espacenetUrl } from "./espacenet";
   import HighlightedText, { type FindMatch } from "./HighlightedText.svelte";
 
@@ -51,6 +53,15 @@
   let retrievingDrawings = $state(false);
   let gotoParagraph = $state("");
 
+  // Right panel: figures or highlights, resizable by its left edge.
+  type SideTab = "figures" | "highlights";
+  let sideTab = $state<SideTab>("highlights");
+  let sideWidth = $state(380);
+  let figurePage = $state(0);
+  let figurePanel = $state<FigurePanel | undefined>(undefined);
+
+  const figurePages = $derived((doc?.drawing_pages ?? []).filter((p) => p.page >= 1));
+
   const sectionText = $derived<Record<AnnotationSection, string>>({
     title: doc?.title ?? "",
     abstract: doc?.abstract_text ?? "",
@@ -77,6 +88,8 @@
     error = "";
     try {
       doc = await viewDocument(id);
+      figurePage = 0;
+      sideTab = doc && doc.drawing_pages.some((p) => p.page >= 1) ? "figures" : "highlights";
       selection = null;
       editing = null;
       currentMatch = 0;
@@ -132,11 +145,47 @@
     try {
       await retrieveDrawingsNow(doc.id);
       await load(doc.id);
+      if (figurePages.length > 0) sideTab = "figures";
     } catch (err) {
       error = String(err);
     } finally {
       retrievingDrawings = false;
     }
+  }
+
+  // --- Figures ---------------------------------------------------------------
+
+  async function handleRotate(page: DrawingPageRow, rotation: number) {
+    if (!doc) return;
+    const previous = page.rotation;
+    page.rotation = rotation;
+    try {
+      await setDrawingRotation(doc.id, page.page, rotation);
+    } catch (err) {
+      page.rotation = previous;
+      error = String(err);
+    }
+  }
+
+  function showFigure(index: number) {
+    figurePage = index;
+    sideTab = "figures";
+  }
+
+  function startResize(e: PointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sideWidth;
+    const move = (ev: PointerEvent) => {
+      const max = Math.max(300, window.innerWidth * 0.6);
+      sideWidth = Math.round(Math.max(260, Math.min(max, startWidth + startX - ev.clientX)));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   }
 
   // --- Navigation ----------------------------------------------------------
@@ -389,6 +438,12 @@
     } else if (e.key === "Escape") {
       selection = null;
       editing = null;
+    } else if (sideTab === "figures" && figurePanel && (e.key === "r" || e.key === "R")) {
+      e.preventDefault();
+      figurePanel.turn(e.shiftKey ? -90 : 90);
+    } else if (sideTab === "figures" && figurePanel && (e.key === "[" || e.key === "]")) {
+      e.preventDefault();
+      figurePanel.step(e.key === "]" ? 1 : -1);
     } else if (selection && (e.key === "h" || e.key === "H")) {
       e.preventDefault();
       highlightSelection(lastColor, false);
@@ -471,7 +526,7 @@
       Open a document with the box above, or with “View” in the Review and Library tabs.
     </p>
   {:else}
-    <div class="panes">
+    <div class="panes" style:grid-template-columns="200px minmax(0, 1fr) {sideWidth}px">
       <nav class="outline" aria-label="Outline">
         <button class="section-link" onclick={() => goToSection("metadata")}>Metadata</button>
         <button class="section-link" onclick={() => goToSection("abstract")}>Abstract</button>
@@ -610,9 +665,11 @@
             <p class="source-note">
               Source: {doc.drawings_status.source} · {doc.drawings_status.page_count} page(s)
             </p>
-            <div class="thumbnails">
-              {#each doc.drawing_pages.filter((p) => p.page >= 1) as page (page.page)}
-                <DrawingPage docId={doc.id} page={page.page} size={180} />
+            <div class="page-chips">
+              {#each figurePages as page, i (page.page)}
+                <button onclick={() => showFigure(i)} title="Show page {page.page} in the Figures panel">
+                  Page {page.page}
+                </button>
               {/each}
             </div>
           {:else if doc.drawings_status?.status === "not_available"}
@@ -628,30 +685,62 @@
         </section>
       </article>
 
-      <aside class="highlights">
-        <h3>Highlights ({annotationCount})</h3>
-        {#if annotationCount === 0}
-          <p class="note">Select text, then pick a colour, or press H (highlight) or C (highlight with a comment).</p>
+      <aside class="side">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="resize-handle" onpointerdown={startResize} title="Drag to resize"></div>
+        <div class="side-tabs">
+          <button class:active={sideTab === "figures"} onclick={() => (sideTab = "figures")}>
+            Figures{figurePages.length > 0 ? ` (${figurePages.length})` : ""}
+          </button>
+          <button class:active={sideTab === "highlights"} onclick={() => (sideTab = "highlights")}>
+            Highlights ({annotationCount})
+          </button>
+        </div>
+        {#if sideTab === "figures"}
+          {#if figurePages.length > 0}
+            <FigurePanel
+              bind:this={figurePanel}
+              docId={doc.id}
+              pages={figurePages}
+              bind:current={figurePage}
+              onRotate={handleRotate}
+            />
+          {:else if doc.drawings_status?.status === "not_available"}
+            <p class="note">This publication has no drawings.</p>
+          {:else}
+            <p class="note">
+              {doc.drawings_status?.status === "error" ? "Drawings retrieval failed." : "Drawings not retrieved."}
+            </p>
+            <button onclick={handleRetrieveDrawings} disabled={retrievingDrawings}>
+              {retrievingDrawings ? "Retrieving…" : "Retrieve drawings now"}
+            </button>
+          {/if}
+        {:else}
+          <div class="highlights">
+            {#if annotationCount === 0}
+              <p class="note">Select text, then pick a colour, or press H (highlight) or C (highlight with a comment).</p>
+            {/if}
+            <ul>
+              {#each doc.annotations as a (a.id)}
+                <li class:detached={a.detached} class:flash={flashing === `hl-${a.id}`}>
+                  <button class="hl-entry" onclick={() => goToAnnotation(a)} disabled={a.detached}>
+                    <span class="swatch" style:background="var(--hl-{a.color})"></span>
+                    <span class="location">{a.location}</span>
+                    <span class="quote">“{a.quote}”</span>
+                    {#if a.comment}<span class="comment">{a.comment}</span>{/if}
+                    {#if a.detached}<span class="note">Passage no longer in the text.</span>{/if}
+                  </button>
+                  <div class="hl-actions">
+                    <button class="link" onclick={(e) => openEditor(a, (e.currentTarget as HTMLElement).getBoundingClientRect())}>
+                      Edit
+                    </button>
+                    <button class="link danger" onclick={() => removeAnnotation(a.id)}>Delete</button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          </div>
         {/if}
-        <ul>
-          {#each doc.annotations as a (a.id)}
-            <li class:detached={a.detached} class:flash={flashing === `hl-${a.id}`}>
-              <button class="hl-entry" onclick={() => goToAnnotation(a)} disabled={a.detached}>
-                <span class="swatch" style:background="var(--hl-{a.color})"></span>
-                <span class="location">{a.location}</span>
-                <span class="quote">“{a.quote}”</span>
-                {#if a.comment}<span class="comment">{a.comment}</span>{/if}
-                {#if a.detached}<span class="note">Passage no longer in the text.</span>{/if}
-              </button>
-              <div class="hl-actions">
-                <button class="link" onclick={(e) => openEditor(a, (e.currentTarget as HTMLElement).getBoundingClientRect())}>
-                  Edit
-                </button>
-                <button class="link danger" onclick={() => removeAnnotation(a.id)}>Delete</button>
-              </div>
-            </li>
-          {/each}
-        </ul>
       </aside>
     </div>
   {/if}
@@ -790,7 +879,6 @@
   }
   .panes {
     display: grid;
-    grid-template-columns: 220px 1fr 280px;
     gap: 1rem;
     height: calc(100svh - 8.5rem);
   }
@@ -799,6 +887,56 @@
   .highlights {
     overflow-y: auto;
     min-height: 0;
+  }
+  .side {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+    min-width: 0;
+    padding-left: 0.5rem;
+  }
+  .resize-handle {
+    position: absolute;
+    left: -0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 0.6rem;
+    cursor: col-resize;
+    border-left: 1px solid var(--border);
+    margin-left: 0.25rem;
+  }
+  .resize-handle:hover {
+    border-left: 2px solid var(--accent);
+  }
+  .side-tabs {
+    display: flex;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    flex: none;
+  }
+  .side-tabs button {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.3rem 0.1rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .side-tabs button.active {
+    color: var(--text-h);
+    border-bottom-color: var(--accent);
+  }
+  .page-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .page-chips button {
+    font-size: 0.85rem;
+    padding: 0.2rem 0.6rem;
   }
   .outline {
     display: flex;
@@ -920,11 +1058,6 @@
     background-color: var(--bg-alt);
     outline: 2px solid var(--accent);
   }
-  .thumbnails {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
   .link {
     background: none;
     border: none;
@@ -938,7 +1071,7 @@
   }
   .highlights ul {
     list-style: none;
-    margin: 0.5rem 0 0;
+    margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
