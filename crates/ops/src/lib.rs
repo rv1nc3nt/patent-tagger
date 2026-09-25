@@ -7,6 +7,7 @@ pub mod error;
 pub mod fulltext;
 pub mod images;
 pub mod retry;
+pub mod search;
 pub mod throttle;
 
 pub use error::OpsError;

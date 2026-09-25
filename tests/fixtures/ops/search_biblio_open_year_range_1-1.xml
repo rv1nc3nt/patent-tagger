@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="../../../style/exchange.xsl"?>
+<ops:world-patent-data xmlns="http://www.epo.org/exchange" xmlns:ops="http://ops.epo.org" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <ops:biblio-search total-result-count="2009" publications-count="1">
+        <ops:query syntax="CQL">pa = "Siemens Healthineers" and pd >= 2023</ops:query>
+        <ops:range begin="1" end="1"/>
+        <ops:search-result>
+            <exchange-documents>
+                <exchange-document system="ops.epo.org" family-id="101211747" country="DE" doc-number="102025111236" kind="A1">
+                    <bibliographic-data>
+                        <publication-reference>
+                            <document-id document-id-type="docdb">
+                                <country>DE</country>
+                                <doc-number>102025111236</doc-number>
+                                <kind>A1</kind>
+                                <date>20260924</date>
+                            </document-id>
+                            <document-id document-id-type="epodoc">
+                                <doc-number>DE102025111236</doc-number>
+                                <date>20260924</date>
+                            </document-id>
+                        </publication-reference>
+                        <classifications-ipcr>
+                            <classification-ipcr sequence="1">
+                                <text>A61B   5/   055            A I                    </text>
+                            </classification-ipcr>
+                            <classification-ipcr sequence="2">
+                                <text>G01R  33/    28            A I                    </text>
+                            </classification-ipcr>
+                            <classification-ipcr sequence="3">
+                                <text>G01R  33/   341            A I                    </text>
+                            </classification-ipcr>
+                            <classification-ipcr sequence="4">
+                                <text>G01R  33/    36            A I                    </text>
+                            </classification-ipcr>
+                            <classification-ipcr sequence="5">
+                                <text>G01R  33/    48            A I                    </text>
+                            </classification-ipcr>
+                        </classifications-ipcr>
+                        <patent-classifications/>
+                        <application-reference doc-id="655718197">
+                            <document-id document-id-type="docdb">
+                                <country>DE</country>
+                                <doc-number>102025111236</doc-number>
+                                <kind>A</kind>
+                                <date>20250324</date>
+                            </document-id>
+                            <document-id document-id-type="epodoc">
+                                <doc-number>DE202510111236</doc-number>
+                                <date>20250324</date>
+                            </document-id>
+                            <document-id document-id-type="original">
+                                <doc-number>102025111236</doc-number>
+                            </document-id>
+                        </application-reference>
+                        <priority-claims>
+                            <priority-claim sequence="1" kind="national">
+                                <document-id document-id-type="docdb">
+                                    <country>DE</country>
+                                    <doc-number>102025111236</doc-number>
+                                    <kind>A</kind>
+                                    <date>20250324</date>
+                                </document-id>
+                                <document-id document-id-type="epodoc">
+                                    <doc-number>DE202510111236</doc-number>
+                                    <date>20250324</date>
+                                </document-id>
+                            </priority-claim>
+                        </priority-claims>
+                        <parties>
+                            <applicants>
+                                <applicant sequence="1" data-format="epodoc">
+                                    <applicant-name>
+                                        <name>SIEMENS HEALTHINEERS AG [DE]</name>
+                                    </applicant-name>
+                                </applicant>
+                                <applicant sequence="1" data-format="original">
+                                    <applicant-name>
+                                        <name>Siemens Healthineers AG</name>
+                                    </applicant-name>
+                                </applicant>
+                            </applicants>
+                            <inventors>
+                                <inventor sequence="1" data-format="epodoc">
+                                    <inventor-name>
+                                        <name>MALZACHER MATTHIAS [DE]</name>
+                                    </inventor-name>
+                                </inventor>
+                                <inventor sequence="2" data-format="epodoc">
+                                    <inventor-name>
+                                        <name>SUKKAU JOHANN [DE]</name>
+                                    </inventor-name>
+                                </inventor>
+                                <inventor sequence="1" data-format="original">
+                                    <inventor-name>
+                                        <name>Malzacher, Matthias</name>
+                                    </inventor-name>
+                                </inventor>
+                                <inventor sequence="2" data-format="original">
+                                    <inventor-name>
+                                        <name>Sukkau, Johann</name>
+                                    </inventor-name>
+                                </inventor>
+                            </inventors>
+                        </parties>
+                        <invention-title lang="de">Vorrichtung und Verfahren zur optischen, kabellosen Datenübertragung zwischen Komponenten eines Magnetresonanztomographen</invention-title>
+                        <references-cited>
+                            <citation cited-phase="national-search-report" cited-by="examiner" sequence="1">
+                                <nplcit num="1">
+                                    <text>- BIBER, S., et al. Analog optical transmission of 4 MRI receive channels with high dynamic range over one single optical fiber. In: 16th Annual Meeting of the International Society for Magnetic Resonance in Medicine, Toronto. 2008.</text>
+                                </nplcit>
+                            </citation>
+                            <citation cited-phase="national-search-report" cited-by="examiner" sequence="2">
+                                <nplcit num="2">
+                                    <text>- NOHAVA, Lena, et al. Perspectives in wireless radio frequency coil development for magnetic resonance imaging. Frontiers in Physics, 2020, 8. Jg., S. 11.</text>
+                                </nplcit>
+                            </citation>
+                        </references-cited>
+                    </bibliographic-data>
+                    <abstract lang="de">
+                        <p>Die Erfindung betrifft ein Peripheriegerät für einen Magnetresonanztomographen mit einem optischen Sender zum Übertragen von Daten über den freien Raum, sowie einen Magnetresonanztomograph mit einem optischen Empfänger mit einem Lichtleiter in einem Patiententunnel, der ausgebildet ist, optische Signale aus einer Umgebung einzukoppeln, und ein Verfahren zum Betrieb.</p>
+                    </abstract>
+                </exchange-document>
+            </exchange-documents>
+        </ops:search-result>
+    </ops:biblio-search>
+</ops:world-patent-data>

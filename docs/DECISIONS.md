@@ -281,4 +281,12 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
 - **Member kept:** within a page, a family's earliest publication with an English abstract, or its earliest publication when none has one. `search/biblio` returns abstracts and dates with the results, so choosing needs no extra request.
 - **Pipeline:** the chosen publications are imported like a pasted list, with the family id stored at insert so the next page already sees the family. Their biblio is fetched again by the normal import job. Reusing the search response would save those requests, but would need a second code path through the selection cascade (SPEC 5.3), so it is left as a possible optimisation.
 - **Start over:** an exhausted search can be restarted from result 1, to pick up new publications. Families already imported are skipped again.
+- **Verified against the live host** (2026-09-25, 3 calls, recorded in `tests/fixtures/ops/search_biblio_*.xml`):
+  - `GET /published-data/search/biblio?q=<CQL>&Range=<begin>-<end>` works, with the range as a query parameter.
+  - The response carries `ops:biblio-search/@total-result-count`, and each `exchange-document` carries `@family-id`, the docdb publication date and its abstracts. The existing `biblio::parse` reads it unchanged.
+  - `pd within "2021 2021"` and `pd>=2023` are both accepted. OPS echoes the query normalised (`pd >= 2023`).
+  - Asking beyond result 2,000 returns `400 CLIENT.InvalidQuery`. `searches::next_range` never goes past 2,000.
+  - Results come newest first. New publications therefore push older ones back: a later batch re-reads some results (skipped as known families) and misses only the newest ones, which "Start over" picks up.
+  - A page costs about 25 KB of quota per result, so about 2.5 MB per 100-result batch.
+- **Not verified:** the response to a query with no match. It is assumed to be the `404 SERVER.EntityNotFound` fault seen for publications, and `ops::search::search` treats a 404 as an empty page.
 
