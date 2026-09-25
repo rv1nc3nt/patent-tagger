@@ -254,7 +254,7 @@
             <button onclick={next} disabled={index >= queue.length - 1} title="Next document (J)">Next →</button>
             <span class="spacer"></span>
             <button onclick={handleSkip} title="Skip this document (S)">Skip</button>
-            <button class="primary" onclick={handleValidate} title="Validate the checked tags and move on (Enter)">
+            <button class="primary" onclick={handleValidate} title="Validate the selected tags and move on (Enter)">
               Validate
             </button>
           </div>
@@ -373,7 +373,6 @@
                   onclick={() => toggleTag(tag.tag_id)}
                 >
                   <span class="line">
-                    <span class="check" aria-hidden="true">{checked.has(tag.tag_id) ? "✓" : ""}</span>
                     <span class="name">{tag.name}</span>
                     {#if tag.automatic}<span class="badge" title="Decided automatically">auto</span>{/if}
                     {#if tag.hotkey}<kbd>{tag.hotkey}</kbd>{/if}
@@ -554,21 +553,22 @@
   .tags-pane .tag {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.25rem;
     width: 100%;
     text-align: left;
-    padding: 0.35rem 0.5rem;
+    padding: 0.35rem 0.6rem;
     font-size: 0.9rem;
-    background: var(--bg);
+    border-color: transparent;
+    background: var(--bg-alt);
   }
   .tags-pane .tag.selected {
-    background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+    background: var(--accent);
     border-color: var(--accent);
-    color: var(--text-h);
+    color: var(--bg);
     font-weight: 600;
   }
   .tags-pane .tag.weak .name {
-    opacity: 0.7;
+    opacity: 0.75;
     font-style: italic;
   }
   .tags-pane .tag.uncertain {
@@ -579,21 +579,6 @@
     align-items: center;
     gap: 0.4rem;
   }
-  .tags-pane .check {
-    width: 1rem;
-    height: 1rem;
-    flex: none;
-    display: inline-grid;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    font-size: 0.7rem;
-  }
-  .tags-pane .tag.selected .check {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--bg);
-  }
   .tags-pane .name {
     flex: 1;
   }
@@ -603,9 +588,20 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--accent);
-    border: 1px solid var(--accent);
+    border: 1px solid currentColor;
     border-radius: 3px;
     padding: 0 0.25rem;
+  }
+  .tags-pane .tag.selected .badge,
+  .tags-pane .tag.selected kbd {
+    color: inherit;
+    border-color: currentColor;
+  }
+  .tags-pane .tag.selected .score-bar {
+    background: color-mix(in srgb, var(--bg) 35%, transparent);
+  }
+  .tags-pane .tag.selected .score-bar .fill {
+    background: var(--bg);
   }
   .score-bar {
     display: block;
