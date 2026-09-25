@@ -176,6 +176,7 @@ pub(crate) fn export_document_folder(
         &tag_names,
         fulltext_export.as_ref(),
         drawings_export.as_ref(),
+        &core_lib::annotations::list(conn, doc_id)?,
     );
     std::fs::write(folder.join(format!("{}.txt", detail.pub_key)), text)?;
     Ok(true)

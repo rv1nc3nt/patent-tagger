@@ -12,6 +12,34 @@ pub struct ExportRow {
     pub title: Option<String>,
     pub tags: Vec<String>,
     pub sources: Vec<String>,
+    /// View-screen highlights, in reading order. Not part of the CSV.
+    pub highlights: Vec<ExportHighlight>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ExportHighlight {
+    pub section: String,
+    pub location: String,
+    pub quote: String,
+    pub comment: Option<String>,
+    pub color: String,
+    /// The quote is no longer in the stored text (see `annotations`).
+    pub detached: bool,
+    pub created_at: String,
+}
+
+impl From<crate::annotations::Annotation> for ExportHighlight {
+    fn from(a: crate::annotations::Annotation) -> Self {
+        ExportHighlight {
+            section: a.section,
+            location: a.location,
+            quote: a.quote,
+            comment: a.comment,
+            color: a.color,
+            detached: a.detached,
+            created_at: a.created_at,
+        }
+    }
 }
 
 /// Every fetched document (SPEC 8 Export: CSV/JSON cover the library, not
@@ -41,11 +69,16 @@ pub fn export_rows(conn: &Connection) -> Result<Vec<ExportRow>, StorageError> {
         let sources = abstract_source
             .map(|s| vec![format!("abstract {s}")])
             .unwrap_or_default();
+        let highlights = crate::annotations::list(conn, doc_id)?
+            .into_iter()
+            .map(ExportHighlight::from)
+            .collect();
         rows.push(ExportRow {
             pub_key,
             title,
             tags,
             sources,
+            highlights,
         });
     }
     Ok(rows)
@@ -115,11 +148,16 @@ pub struct DocumentExportDrawings {
 /// attempted (no row in `fulltext`/`drawings_status` yet, e.g. the policy
 /// is "never" or "on demand" and nobody asked); "Missing parts are stated
 /// explicitly...never omitted silently" applies to that case too.
+///
+/// A `HIGHLIGHTS` section follows `DRAWINGS` when the document has any
+/// View-screen highlights. It is left out when there are none, since it is
+/// the user's work rather than a part of the publication.
 pub fn document_txt(
     detail: &crate::documents::DocumentDetail,
     tags: &[String],
     fulltext: Option<&DocumentExportFulltext>,
     drawings: Option<&DocumentExportDrawings>,
+    highlights: &[crate::annotations::Annotation],
 ) -> String {
     let mut out = String::new();
     let kind_codes = if detail.kind_codes.is_empty() {
@@ -219,6 +257,34 @@ pub fn document_txt(
             "error" => out.push_str("Drawings retrieval failed.\n"),
             _ => out.push_str("Drawings not retrieved.\n"),
         },
+    }
+
+    if !highlights.is_empty() {
+        out.push_str("===== HIGHLIGHTS =====\n");
+        for h in highlights {
+            out.push_str(&highlight_txt(h));
+        }
+    }
+    out
+}
+
+/// `Claim 1 (yellow): "quote"`, then the comment indented below it. Line
+/// breaks inside the quote become spaces.
+fn highlight_txt(h: &crate::annotations::Annotation) -> String {
+    let quote = h.quote.split_whitespace().collect::<Vec<_>>().join(" ");
+    let state = if h.detached {
+        ", passage no longer in the text"
+    } else {
+        ""
+    };
+    let mut out = format!("{} ({}{state}): \"{quote}\"\n", h.location, h.color);
+    if let Some(comment) = &h.comment {
+        for (i, line) in comment.lines().enumerate() {
+            let prefix = if i == 0 { "  Comment: " } else { "           " };
+            out.push_str(prefix);
+            out.push_str(line.trim_end());
+            out.push('\n');
+        }
     }
     out
 }
@@ -375,6 +441,7 @@ mod tests {
             title: Some("A \"gadget\", improved".to_string()),
             tags: vec!["Battery".to_string()],
             sources: vec!["abstract EP.1234567.A1".to_string()],
+            highlights: Vec::new(),
         }];
         let csv = to_csv(&rows);
         assert!(csv.contains("\"A \"\"gadget\"\", improved\""));
@@ -415,6 +482,20 @@ mod tests {
         assert_eq!(rows[0].pub_key, "EP1234567");
         assert_eq!(rows[0].tags, vec!["Battery"]);
         assert_eq!(rows[0].sources, vec!["abstract EP.1234567.A1"]);
+        assert!(rows[0].highlights.is_empty());
+
+        crate::annotations::create(&conn, doc.id, "abstract", 3, 11, Some("why"), "green", NOW)
+            .unwrap();
+        let rows = export_rows(&conn).unwrap();
+        assert_eq!(rows[0].highlights.len(), 1);
+        assert_eq!(rows[0].highlights[0].quote, "abstract");
+        assert_eq!(rows[0].highlights[0].location, "Abstract");
+        assert_eq!(rows[0].highlights[0].comment.as_deref(), Some("why"));
+        assert_eq!(
+            to_csv(&rows).lines().count(),
+            2,
+            "CSV has no highlights column"
+        );
     }
 
     #[test]
@@ -466,7 +547,7 @@ mod tests {
 
     #[test]
     fn document_txt_states_missing_parts_explicitly_when_never_retrieved() {
-        let text = document_txt(&base_detail(), &["Battery".to_string()], None, None);
+        let text = document_txt(&base_detail(), &["Battery".to_string()], None, None, &[]);
         assert!(text.starts_with("Publication: EP1234567 (A1)\n"));
         assert!(text.contains("Applicants: Not available"));
         assert!(text.contains("Sources: abstract EP.1234567.A1\n"));
@@ -493,7 +574,7 @@ mod tests {
             ],
             source: Some("EP.1234567.A1".to_string()),
         };
-        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings), &[]);
         assert!(text.contains(
             "Sources: abstract EP.1234567.A1; full text EP.1234567.B1; drawings EP.1234567.A1\n"
         ));
@@ -511,7 +592,7 @@ mod tests {
             lang: Some("DE".to_string()),
             source: Some("EP.1234567.A1".to_string()),
         };
-        let text = document_txt(&base_detail(), &[], Some(&fulltext), None);
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), None, &[]);
         assert!(text.contains(
             "===== DESCRIPTION =====\n[Non-English text, language: DE]\n[0001] Nur Deutsch.\n"
         ));
@@ -561,6 +642,7 @@ mod tests {
             &["Battery".to_string(), "Ceramics".to_string()],
             Some(&fulltext),
             Some(&drawings),
+            &[],
         );
 
         let reference = std::fs::read_to_string(format!(
@@ -581,8 +663,47 @@ mod tests {
             status: "not_available".to_string(),
             ..Default::default()
         };
-        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings));
+        let text = document_txt(&base_detail(), &[], Some(&fulltext), Some(&drawings), &[]);
         assert!(text.contains("===== DESCRIPTION =====\nFull text not available in OPS.\n"));
         assert!(text.contains("===== DRAWINGS =====\nThis publication has no drawings.\n"));
+    }
+
+    #[test]
+    fn document_txt_lists_highlights_after_drawings() {
+        let highlight = |location: &str, quote: &str, comment: Option<&str>, detached: bool| {
+            crate::annotations::Annotation {
+                id: 1,
+                doc_id: 1,
+                section: "claims".to_string(),
+                start: 0,
+                end: 1,
+                quote: quote.to_string(),
+                comment: comment.map(str::to_string),
+                color: "yellow".to_string(),
+                created_at: NOW.to_string(),
+                updated_at: NOW.to_string(),
+                detached,
+                location: location.to_string(),
+            }
+        };
+        let highlights = [
+            highlight(
+                "Claim 1",
+                "a mould\ncontainer",
+                Some("Key feature.\nSee also D1."),
+                false,
+            ),
+            highlight("Description", "old text", None, true),
+        ];
+        let text = document_txt(&base_detail(), &[], None, None, &highlights);
+        assert!(text.ends_with(
+            "===== DRAWINGS =====\nDrawings not retrieved.\n\
+             ===== HIGHLIGHTS =====\n\
+             Claim 1 (yellow): \"a mould container\"\n  Comment: Key feature.\n           See also D1.\n\
+             Description (yellow, passage no longer in the text): \"old text\"\n"
+        ));
+
+        let without = document_txt(&base_detail(), &[], None, None, &[]);
+        assert!(!without.contains("HIGHLIGHTS"));
     }
 }
