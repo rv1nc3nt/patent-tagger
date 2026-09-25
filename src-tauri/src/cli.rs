@@ -19,11 +19,17 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Runs the whole import pipeline for a file of publication numbers:
-    /// fetch, embed, score, auto-complete where allowed, queue the rest,
-    /// and retrieve full text/drawings per policy.
+    /// Runs the whole import pipeline for a file of publication numbers, or
+    /// for the next 100 results of a saved search: fetch, embed, score,
+    /// auto-complete where allowed, queue the rest, and retrieve full
+    /// text/drawings per policy.
     Import {
-        file: PathBuf,
+        #[arg(required_unless_present = "search", conflicts_with = "search")]
+        file: Option<PathBuf>,
+        /// Imports the next 100 results of this saved search instead of a
+        /// file (see the `search` subcommand).
+        #[arg(long)]
+        search: Option<String>,
         /// Forces full-text retrieval for every document fetched by this
         /// run, regardless of the configured retrieval policy.
         #[arg(long)]
@@ -42,8 +48,40 @@ enum Command {
         #[arg(long, value_enum, default_value_t = ExportFormat::Txt)]
         format: ExportFormat,
     },
+    /// Manages saved searches by applicant, imported with
+    /// `import --search <name>`.
+    Search {
+        #[command(subcommand)]
+        action: SearchAction,
+    },
     /// Prints a summary of the current database and job queue state.
     Status,
+}
+
+#[derive(Subcommand)]
+enum SearchAction {
+    /// Saves a new search.
+    Add {
+        name: String,
+        /// Applicant name; separate name variants with `;`.
+        #[arg(long)]
+        applicant: String,
+        /// Publication country, e.g. EP.
+        #[arg(long)]
+        country: Option<String>,
+        /// First publication year.
+        #[arg(long)]
+        from: Option<i64>,
+        /// Last publication year.
+        #[arg(long)]
+        to: Option<i64>,
+    },
+    /// Lists saved searches and their progress.
+    List,
+    /// Deletes a saved search. Documents it imported stay.
+    Delete { name: String },
+    /// Starts a search over from its first result.
+    Restart { name: String },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -59,9 +97,22 @@ pub fn run(cli: Cli) -> i32 {
     let result = match cli.command {
         Command::Import {
             file,
+            search,
             fetch_fulltext,
             fetch_drawings,
-        } => run_import(&file, fetch_fulltext, fetch_drawings),
+        } => {
+            let source = match (file, search) {
+                (_, Some(name)) => ImportSource::Search(name),
+                (Some(file), None) => ImportSource::File(file),
+                // clap requires one of the two (`required_unless_present`).
+                (None, None) => {
+                    eprintln!("error: give a file or --search <name>");
+                    return 2;
+                }
+            };
+            run_import(source, fetch_fulltext, fetch_drawings)
+        }
+        Command::Search { action } => run_search(action),
         Command::Export { tag, out, format } => run_export(&tag, &out, format),
         Command::Status => run_status(),
     };
@@ -80,16 +131,18 @@ fn tokio_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
         .build()?)
 }
 
+enum ImportSource {
+    File(PathBuf),
+    Search(String),
+}
+
 fn run_import(
-    file: &std::path::Path,
+    source: ImportSource,
     fetch_fulltext: bool,
     fetch_drawings: bool,
 ) -> anyhow::Result<()> {
     let db = crate::db::open()?;
     let _lock = crate::lock::PipelineLock::acquire(&db.data_dir)?;
-
-    let raw_input = std::fs::read_to_string(file)
-        .map_err(|e| anyhow::anyhow!("reading {}: {e}", file.display()))?;
 
     let creds = crate::platform::credentials::load(&db.data_dir)?.ok_or_else(|| {
         anyhow::anyhow!(
@@ -100,15 +153,43 @@ fn run_import(
     let embedder = embed_lib::BgeSmallEmbedder::load()?;
 
     let now = current_timestamp();
-    let report = {
-        let conn = db
-            .conn
-            .lock()
-            .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
-        crate::commands::import_numbers_into(&conn, &raw_input, &now)?
-    };
-
     let rt = tokio_runtime()?;
+    match source {
+        ImportSource::File(file) => {
+            let raw_input = std::fs::read_to_string(&file)
+                .map_err(|e| anyhow::anyhow!("reading {}: {e}", file.display()))?;
+            let report = {
+                let conn = db
+                    .conn
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+                crate::commands::import_numbers_into(&conn, &raw_input, &now)?
+            };
+            println!(
+                "imported: {}, duplicates: {}, unparseable: {}, needs review: {}",
+                report.imported.len(),
+                report.duplicates.len(),
+                report.unparseable.len(),
+                report.needs_normalisation.len(),
+            );
+        }
+        ImportSource::Search(name) => {
+            let search_id = {
+                let conn = db
+                    .conn
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+                core_lib::searches::get_by_name(&conn, &name)?
+                    .ok_or_else(|| anyhow::anyhow!("no saved search named {name:?}"))?
+                    .id
+            };
+            let report = rt.block_on(crate::search::fetch_next_batch(
+                &db.conn, &client, search_id, &now,
+            ))?;
+            print_batch(&name, &report);
+        }
+    }
+
     let outcomes = rt.block_on(crate::import_worker::run(
         &db.conn,
         &client,
@@ -158,13 +239,6 @@ fn run_import(
         .filter(|o| o.status == "error" || o.status == "not_found")
         .count();
     println!(
-        "imported: {}, duplicates: {}, unparseable: {}, needs review: {}",
-        report.imported.len(),
-        report.duplicates.len(),
-        report.unparseable.len(),
-        report.needs_normalisation.len(),
-    );
-    println!(
         "fetched: {}, auto-completed: {}, audited samples: {}, errors/not found: {errors}",
         outcomes.iter().filter(|o| o.status == "fetched").count(),
         automation_summary.auto_completed,
@@ -173,6 +247,85 @@ fn run_import(
 
     if errors > 0 {
         anyhow::bail!("{errors} document(s) failed to import");
+    }
+    Ok(())
+}
+
+fn print_batch(name: &str, report: &crate::search::BatchReport) {
+    let total = report
+        .search
+        .as_ref()
+        .and_then(|s| s.total_results)
+        .unwrap_or(0);
+    match report.range {
+        Some((begin, end)) => println!(
+            "search {name:?}: results {begin}-{end} of {total}, families: {}, \
+             already in library: {}, duplicates: {}, imported: {}",
+            report.families,
+            report.known_families.len(),
+            report.duplicates.len(),
+            report.imported.len(),
+        ),
+        None => println!(
+            "search {name:?}: no more results ({total} in total, at most {} readable); \
+             use `search restart` to start over",
+            core_lib::searches::MAX_RESULTS,
+        ),
+    }
+}
+
+fn run_search(action: SearchAction) -> anyhow::Result<()> {
+    let db = crate::db::open()?;
+    let conn = db
+        .conn
+        .lock()
+        .map_err(|_| anyhow::anyhow!("database mutex poisoned"))?;
+    let find = |name: &str| -> anyhow::Result<core_lib::searches::SavedSearch> {
+        core_lib::searches::get_by_name(&conn, name)?
+            .ok_or_else(|| anyhow::anyhow!("no saved search named {name:?}"))
+    };
+    match action {
+        SearchAction::Add {
+            name,
+            applicant,
+            country,
+            from,
+            to,
+        } => {
+            let fields = core_lib::searches::SearchFields {
+                name,
+                applicant,
+                country,
+                year_from: from,
+                year_to: to,
+            };
+            let search = core_lib::searches::create(&conn, &fields, &current_timestamp())?;
+            println!("saved search {:?}: {}", search.name, search.query);
+        }
+        SearchAction::List => {
+            for s in core_lib::searches::list(&conn)? {
+                let progress = match s.total_results {
+                    None => "not run yet".to_string(),
+                    Some(total) => format!(
+                        "read {} of {total}{}",
+                        (s.next_start - 1).min(total),
+                        if s.exhausted { " (done)" } else { "" }
+                    ),
+                };
+                println!(
+                    "{}: {} - {progress}, imported {}",
+                    s.name, s.query, s.imported
+                );
+            }
+        }
+        SearchAction::Delete { name } => {
+            core_lib::searches::delete(&conn, find(&name)?.id)?;
+            println!("deleted search {name:?}");
+        }
+        SearchAction::Restart { name } => {
+            core_lib::searches::restart(&conn, find(&name)?.id)?;
+            println!("search {name:?} will start over from its first result");
+        }
     }
     Ok(())
 }
