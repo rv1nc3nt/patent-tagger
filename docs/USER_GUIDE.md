@@ -165,15 +165,25 @@ The defaults are full text after tagging, and drawings on demand. Drawings are m
 
 Full text is taken in English where it exists, from the same publication, its application or its family. If only another language exists, it is stored and labelled with its language code. Some publications have no full text or no drawings in OPS; this is shown rather than treated as an error.
 
+### Reading a document: the View tab
+
+The **View** tab shows one document on a single page: metadata, abstract, description, claims and drawings. Open a document by typing its number or part of its title in the box at the top, or with **Open in View** (Review) or **view** (Library). The document stays open when you switch tabs.
+
+- **Outline** (left): jump to a section, a description heading, a paragraph number (type `12` in the ¶ box), or a claim. Independent claims are in bold; dependent claims are indented. In the claims, a reference such as "claim 4" is a link.
+- **Find**: `Ctrl+F` or `/`, then type at least two characters. Choose *Everywhere* or one section. `Enter` goes to the next match, `Shift+Enter` to the previous one, `Esc` clears.
+- **Highlights**: select some text, then click a colour, or press `H` to highlight with the last colour, or `C` to highlight and add a comment. Click a highlight to change its colour or comment, or delete it. The right pane lists every highlight; click one to go to it.
+
+If the full text is retrieved again and a highlighted passage has changed, the highlight moves to the same words when it can find them. Otherwise it stays in the list, marked "passage no longer in the text".
+
 ## 8. Library and export
 
 The **Library** tab lists every document. Search titles and abstracts, filter by label source, review state, and full-text or drawings availability, and click **+** or **−** on a tag to require or exclude it. **similar** lists the ten most similar documents.
 
 Exports:
 
-- **Export CSV** and **Export JSON**: every fetched document, with its publication number, title, tags and source publication.
+- **Export CSV** and **Export JSON**: every fetched document, with its publication number, title, tags and source publication. The JSON also lists each document's highlights.
 - **list** (next to a tag): a `.txt` file with the publication numbers carrying that tag.
-- **Export selected…**: one folder per tag, holding one folder per ticked document carrying that tag. A document with several tags is copied into each tag's folder; ticked documents without tags go into `_untagged`. Characters not allowed in folder names (such as `/` or `:`) become `_`. Each document folder holds a `.txt` file with the bibliographic data, tags, sources, abstract, description and claims, plus the drawings as PNG files. Missing parts are stated in the file.
+- **Export selected…**: one folder per tag, holding one folder per ticked document carrying that tag. A document with several tags is copied into each tag's folder; ticked documents without tags go into `_untagged`. Characters not allowed in folder names (such as `/` or `:`) become `_`. Each document folder holds a `.txt` file with the bibliographic data, tags, sources, abstract, description and claims, plus the drawings as PNG files, and ends with its highlights and comments, if it has any. Missing parts are stated in the file.
 
 Tick documents to **Retrieve full text for selected** or **Retrieve drawings for selected**.
 

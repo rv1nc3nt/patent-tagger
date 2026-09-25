@@ -137,6 +137,14 @@ saved_searches(                         -- section 5.6
   next_start INTEGER,                   -- 1-based position of the next batch
   imported INTEGER, created_at TEXT, last_run_at TEXT
 )
+
+annotations(                            -- section 8, View
+  id, doc_id, section TEXT,             -- title | abstract | description | claims
+  start INTEGER, "end" INTEGER,         -- UTF-16 offsets into the section's stored text
+  quote TEXT,                           -- the highlighted text, to find it again if the text changes
+  comment TEXT NULL, color TEXT,        -- yellow | green | blue | pink
+  created_at TEXT, updated_at TEXT
+)
 ```
 
 Vectors are stored as little-endian `f32` BLOBs, L2-normalised. `model_id` identifies the model and the hash of its weights, e.g. `bge-small-en-v1.5-f16@<sha256-prefix>`.
@@ -380,6 +388,14 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
   - `S` skips;
   - `/` focuses the tag filter.
 
+**View**
+- Reading one document: opened from a picker (publication number or title), or with "View" from the Review and Library screens. The last document opened stays open while other tabs are shown.
+- **Outline** (left): metadata, abstract, description headings with a "go to paragraph" box, every claim (independent claims in bold, dependent claims indented), drawings. Clicking an entry scrolls to it.
+- **Content** (centre): metadata, abstract, description, claims and drawings on one scrolling page, each with its source publication. A reference such as "claim 4" inside a claim links to that claim. "Retrieve now" buttons when full text or drawings are missing.
+- **Find** (`Ctrl+F` or `/`): matches in the whole document or one section are marked, with a count; `Enter`/`Shift+Enter` (or `F3`) move between them.
+- **Highlights:** selecting text in one section offers four colours and "Comment…"; `H` highlights with the last colour, `C` highlights and opens the comment. Clicking a highlight edits its colour and comment, or deletes it. The right pane lists the document's highlights in reading order; clicking one scrolls to it.
+- A highlight stores its quote. When the stored text changes (full text retrieved again), it follows its quote to the nearest occurrence; when the quote is gone it is listed as "no longer in the text" and not drawn.
+
 **Library**
 - Full-text search over abstracts and, optionally, descriptions and claims (FTS5), combined with filters: tags (including/excluding), label source (human or auto), review state (validated, auto-completed), full-text and drawings availability. Also "similar to this document" (embedding search).
 - Table view with drawing thumbnails; document detail with label history.
@@ -439,7 +455,12 @@ The application is keyboard-first. The UI calls Rust exclusively through typed T
   ===== DRAWINGS =====
   drawings/001.png
   …
+  ===== HIGHLIGHTS =====
+  Claim 1 (yellow): "…"
+    Comment: …
   ```
+
+  The `HIGHLIGHTS` section is present only when the document has highlights (View screen), since they are the user's notes rather than part of the publication. The full JSON export lists each document's highlights; the CSV does not.
 
   Missing parts are stated explicitly (e.g. `Full text not available in OPS`), never omitted silently.
 
