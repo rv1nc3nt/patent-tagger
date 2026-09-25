@@ -16,6 +16,8 @@
   import { espacenetUrl } from "./espacenet";
   import { treeOrder } from "./tagTree";
 
+  let { onView }: { onView?: (docId: number) => void } = $props();
+
   type DetailTab = "abstract" | "description" | "claims" | "drawings";
 
   let queue = $state<QueueEntry[]>([]);
@@ -249,6 +251,11 @@
           {#if doc.cpc.length > 0}<p class="meta">CPC: {doc.cpc.join(", ")}</p>{/if}
           {#if espacenetLink}
             <button class="link" onclick={() => openUrl(espacenetLink)}>Open in Espacenet</button>
+          {/if}
+          {#if onView}
+            <button class="link" onclick={() => doc && onView(doc.id)} title="Read, search and highlight this document">
+              Open in View
+            </button>
           {/if}
 
           <div class="tab-bar">

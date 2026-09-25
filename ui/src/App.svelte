@@ -7,13 +7,22 @@
   import ReviewScreen from "./lib/ReviewScreen.svelte";
   import SettingsScreen from "./lib/SettingsScreen.svelte";
   import TagsScreen from "./lib/TagsScreen.svelte";
+  import ViewScreen from "./lib/ViewScreen.svelte";
 
-  type View = "import" | "review" | "tags" | "metrics" | "library" | "jobs" | "settings";
+  type View = "import" | "review" | "view" | "tags" | "metrics" | "library" | "jobs" | "settings";
   let view = $state<View>("import");
+  // The document open in the View tab, kept while other tabs are shown.
+  let viewDocId = $state<number | null>(null);
+
+  function openInView(docId: number) {
+    viewDocId = docId;
+    view = "view";
+  }
 
   const tabs: { id: View; label: string }[] = [
     { id: "import", label: "Import" },
     { id: "review", label: "Review" },
+    { id: "view", label: "View" },
     { id: "tags", label: "Tags" },
     { id: "metrics", label: "Metrics" },
     { id: "library", label: "Library" },
@@ -59,13 +68,15 @@
   {#if view === "import"}
     <ImportScreen />
   {:else if view === "review"}
-    <ReviewScreen />
+    <ReviewScreen onView={openInView} />
+  {:else if view === "view"}
+    <ViewScreen bind:docId={viewDocId} />
   {:else if view === "tags"}
     <TagsScreen />
   {:else if view === "metrics"}
     <MetricsScreen />
   {:else if view === "library"}
-    <LibraryScreen />
+    <LibraryScreen onView={openInView} />
   {:else if view === "jobs"}
     <JobsScreen overview={jobs} refresh={refreshJobs} />
   {:else}

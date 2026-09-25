@@ -15,6 +15,8 @@
   } from "./api";
   import DrawingPage from "./DrawingPage.svelte";
 
+  let { onView }: { onView?: (docId: number) => void } = $props();
+
   let tags = $state<TagRow[]>([]);
   let rows = $state<LibraryRow[]>([]);
   let query = $state("");
@@ -242,7 +244,10 @@
           <td>{row.title ?? "—"}</td>
           <td>{row.review_state}</td>
           <td>{row.tags.join(", ")}</td>
-          <td><button class="link" onclick={() => handleShowSimilar(row.id)}>similar</button></td>
+          <td>
+            {#if onView}<button class="link" onclick={() => onView(row.id)}>view</button>{/if}
+            <button class="link" onclick={() => handleShowSimilar(row.id)}>similar</button>
+          </td>
         </tr>
         {#if similarFor === row.id}
           <tr class="similar-row">

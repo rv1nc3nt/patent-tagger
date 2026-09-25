@@ -128,6 +128,7 @@ export interface DocumentDetail {
   pub_key: string;
   title: string | null;
   abstract_text: string | null;
+  abstract_source: string | null;
   applicants: string[];
   publication_date: string | null;
   cpc: string[];
@@ -521,4 +522,80 @@ export function retryFailedJobs(kind: JobKind): Promise<number> {
 
 export function cancelPendingJobs(kind: JobKind): Promise<number> {
   return invoke("cancel_pending_jobs", { kind });
+}
+
+// View screen ---------------------------------------------------------------
+
+export type AnnotationSection = "title" | "abstract" | "description" | "claims";
+export type HighlightColor = "yellow" | "green" | "blue" | "pink";
+export const HIGHLIGHT_COLORS: HighlightColor[] = ["yellow", "green", "blue", "pink"];
+
+/// Offsets are UTF-16 code units into the section's text, the same unit as
+/// JavaScript string indices.
+export interface ClaimRef {
+  start: number;
+  end: number;
+  claim: number;
+}
+
+export interface Block {
+  kind: "heading" | "paragraph" | "claim";
+  label: string | null;
+  start: number;
+  end: number;
+  depends_on: number[];
+  claim_refs: ClaimRef[];
+}
+
+export interface Annotation {
+  id: number;
+  doc_id: number;
+  section: AnnotationSection;
+  start: number;
+  end: number;
+  quote: string;
+  comment: string | null;
+  color: HighlightColor;
+  created_at: string;
+  updated_at: string;
+  /// The quote is no longer in the text, so it is listed but not drawn.
+  detached: boolean;
+  location: string;
+}
+
+export interface ViewDocument extends DocumentDetail {
+  tags: string[];
+  fulltext: FulltextRow | null;
+  description_blocks: Block[];
+  claim_blocks: Block[];
+  drawings_status: DrawingsStatusRow | null;
+  drawing_pages: DrawingPage[];
+  annotations: Annotation[];
+}
+
+export function findDocuments(query: string, limit: number): Promise<QueueEntry[]> {
+  return invoke("find_documents", { query, limit });
+}
+
+export function viewDocument(docId: number): Promise<ViewDocument | null> {
+  return invoke("view_document", { docId });
+}
+
+export function createAnnotation(
+  docId: number,
+  section: AnnotationSection,
+  start: number,
+  end: number,
+  comment: string | null,
+  color: HighlightColor,
+): Promise<Annotation[]> {
+  return invoke("create_annotation", { docId, section, start, end, comment, color });
+}
+
+export function updateAnnotation(id: number, comment: string | null, color: HighlightColor): Promise<Annotation[]> {
+  return invoke("update_annotation", { id, comment, color });
+}
+
+export function deleteAnnotation(docId: number, id: number): Promise<Annotation[]> {
+  return invoke("delete_annotation", { docId, id });
 }

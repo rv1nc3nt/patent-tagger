@@ -16,6 +16,7 @@ mod review;
 mod search;
 mod settings;
 mod tag_screen;
+mod view;
 
 use tauri::Manager;
 
@@ -85,6 +86,11 @@ pub fn run() {
             jobs_screen::retry_job,
             jobs_screen::retry_failed_jobs,
             jobs_screen::cancel_pending_jobs,
+            view::find_documents,
+            view::view_document,
+            view::create_annotation,
+            view::update_annotation,
+            view::delete_annotation,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

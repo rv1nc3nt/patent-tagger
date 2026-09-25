@@ -13,6 +13,15 @@
      recall is always orange, never reassigned. */
   --series-precision: #0072b2;
   --series-recall: #e69f00;
+  /* View screen: highlight colours (translucent, so text keeps its own
+     colour) and find matches. */
+  --hl-yellow: rgba(250, 204, 21, 0.45);
+  --hl-green: rgba(74, 222, 128, 0.4);
+  --hl-blue: rgba(96, 165, 250, 0.4);
+  --hl-pink: rgba(244, 114, 182, 0.4);
+  --find-bg: rgba(249, 115, 22, 0.15);
+  --find-outline: rgba(249, 115, 22, 0.7);
+  --find-current: #fb923c;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -42,6 +51,13 @@
        precision/recall identity as light mode. */
     --series-precision: #5ab4e6;
     --series-recall: #f5c451;
+    --hl-yellow: rgba(250, 204, 21, 0.35);
+    --hl-green: rgba(74, 222, 128, 0.3);
+    --hl-blue: rgba(96, 165, 250, 0.35);
+    --hl-pink: rgba(244, 114, 182, 0.35);
+    --find-bg: rgba(251, 146, 60, 0.2);
+    --find-outline: rgba(251, 146, 60, 0.8);
+    --find-current: #fb923c;
   }
 }
 
