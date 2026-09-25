@@ -94,6 +94,20 @@ async fn process_one(
 ) -> DocumentOutcome {
     match fetch_and_select(client, &payload.pub_key).await {
         Ok(data) => {
+            // Tagging relies on the abstract (SPEC section 1); only
+            // "fetched" documents (title + English abstract both present)
+            // get embedded, so the Review queue only ever sees documents
+            // that can actually be scored. Embedding runs before the
+            // database lock is taken: it is the slow step, and the UI's
+            // commands wait on that lock.
+            let vector = match (&data.title, &data.abstract_text) {
+                (Some(title), Some(abstract_text)) => embedder
+                    .embed(&[format!("{title}. {abstract_text}")])
+                    .ok()
+                    .and_then(|mut vectors| vectors.pop()),
+                _ => None,
+            };
+
             let conn = conn_mutex.lock().expect("db mutex poisoned");
             let title = data.title.clone();
             let status = if data.abstract_text.is_some() {
@@ -113,22 +127,13 @@ async fn process_one(
                 };
             }
 
-            // Tagging relies on the abstract (SPEC section 1); only
-            // "fetched" documents (title + English abstract both present)
-            // get embedded, so the Review queue only ever sees documents
-            // that can actually be scored.
-            if let (Some(title), Some(abstract_text)) = (&data.title, &data.abstract_text) {
-                let text = format!("{title}. {abstract_text}");
-                if let Ok(mut vectors) = embedder.embed(&[text]) {
-                    if let Some(vector) = vectors.pop() {
-                        let _ = embeddings::store_document_embedding(
-                            &conn,
-                            payload.doc_id,
-                            embedder.model_id(),
-                            &vector,
-                        );
-                    }
-                }
+            if let Some(vector) = &vector {
+                let _ = embeddings::store_document_embedding(
+                    &conn,
+                    payload.doc_id,
+                    embedder.model_id(),
+                    vector,
+                );
             }
 
             let _ = jobs::mark_done(&conn, job.id, now);

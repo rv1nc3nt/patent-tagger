@@ -290,3 +290,12 @@ SPEC 8 lists "OPS quota usage, as reported by the response headers" as part of t
   - A page costs about 25 KB of quota per result, so about 2.5 MB per 100-result batch.
 - **Not verified:** the response to a query with no match. It is assumed to be the `404 SERVER.EntityNotFound` fault seen for publications, and `ops::search::search` treats a 404 as an empty page.
 
+
+## 2026-09-25 — Tauri commands run off the UI thread
+
+**Question:** The window often froze during imports. Tauri runs a command that is not `async` on the main (UI) thread. Every such command locks the shared database connection, which the import worker held while embedding and during the automatic-label pass, so the whole window stopped repainting until the worker let go.
+
+**Decision:**
+- Every synchronous command is declared `#[tauri::command(async)]`, so it runs on the async runtime. New commands must do the same. A command that waits on the database lock now only delays its own result; the window stays responsive.
+- The import worker embeds a document before taking the lock.
+- The automatic-label passes (`automation.rs`) load the validated documents' embeddings once per pass instead of once per document and tag. The pass never validates a document, so the scores are unchanged.

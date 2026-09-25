@@ -131,32 +131,32 @@ fn import_page(
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_searches(state: State<Db>) -> Result<Vec<SavedSearch>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     searches::list(&conn).map_err(|e| e.to_string())
 }
 
 /// The CQL query `fields` would run, for display while the user types.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn preview_search_query(fields: SearchFields) -> Result<String, String> {
     searches::build_query(&fields).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_search(state: State<Db>, fields: SearchFields) -> Result<SavedSearch, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     searches::create(&conn, &fields, &crate::commands::current_timestamp())
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_search(state: State<Db>, search_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     searches::delete(&conn, search_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restart_search(state: State<Db>, search_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     searches::restart(&conn, search_id).map_err(|e| e.to_string())

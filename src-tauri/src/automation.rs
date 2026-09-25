@@ -49,6 +49,9 @@ pub fn apply_pending_automatic_labels(
     now: &str,
 ) -> Result<usize, storage::StorageError> {
     let mut applied = 0;
+    // Validated documents' embeddings, loaded once for the whole pass: this
+    // pass never validates a document, so the set cannot change.
+    let mut neighbours = None;
     for tag in tags::list_active(conn)?
         .into_iter()
         .filter(|t| t.auto_enabled)
@@ -67,7 +70,6 @@ pub fn apply_pending_automatic_labels(
                 continue;
             };
 
-            let mut neighbours = None;
             let (score, _source, model_version) =
                 crate::review::score_one_tag(conn, embedder, &tag, &doc_vector, &mut neighbours)?;
 
@@ -150,6 +152,8 @@ pub fn apply_full_automation(
 
     let active_tags = tags::list_active(conn)?;
     let audit_rate = settings::audit_rate(conn)?;
+    // Loaded once for the whole pass, as in `apply_pending_automatic_labels`.
+    let mut neighbours = None;
 
     for doc in documents::list_queue(conn)? {
         let mut decisions = Vec::with_capacity(active_tags.len());
@@ -181,7 +185,6 @@ pub fn apply_full_automation(
                 scores.push((tag.id, None, String::new()));
                 continue;
             };
-            let mut neighbours = None;
             let (score, _source, model_version) =
                 crate::review::score_one_tag(conn, embedder, tag, &doc_vector, &mut neighbours)?;
             let decision = full_automation::decide_tag(tag, score);

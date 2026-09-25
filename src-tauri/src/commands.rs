@@ -17,7 +17,7 @@ pub struct ImportReport {
     pub unparseable: Vec<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_numbers(state: State<Db>, raw_input: String) -> Result<ImportReport, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     import_numbers_into(&conn, &raw_input, &current_timestamp()).map_err(|e| e.to_string())
@@ -25,7 +25,7 @@ pub fn import_numbers(state: State<Db>, raw_input: String) -> Result<ImportRepor
 
 /// Minimal credentials entry point for M2 (SPEC section 5.4); the full
 /// Settings screen (target precision, retrieval policies, etc.) is M7.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_ops_credentials(
     state: State<Db>,
     consumer_key: String,
@@ -90,7 +90,7 @@ pub async fn run_import_jobs(
 /// Moves the failed job for `doc_id` back to pending (SPEC section 8's
 /// retry button). Does not itself re-fetch - call `run_import_jobs` again
 /// afterward.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn retry_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = current_timestamp();
@@ -152,7 +152,7 @@ pub(crate) fn import_numbers_into(
 /// SPEC 7.5: "Automatic mode unavailable before eligibility" - refuses
 /// unless the tag currently meets the eligibility bar, in which case its
 /// threshold is set to the just-calibrated value and auto mode turns on.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn enable_automatic_mode(
     state: State<Db>,
     model: State<Model>,
@@ -184,13 +184,13 @@ pub fn enable_automatic_mode(
         .ok_or_else(|| format!("tag {tag_id} not found"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn disable_automatic_mode(state: State<Db>, tag_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::set_auto_enabled(&conn, tag_id, false).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tag_eligibility(
     state: State<Db>,
     tag_id: i64,
@@ -204,7 +204,7 @@ pub fn tag_eligibility(
 
 /// `ordering`: `"import"` (default, `documents::list_queue`'s own order)
 /// or `"uncertain"` (SPEC section 8's "most uncertain first").
-#[tauri::command]
+#[tauri::command(async)]
 pub fn review_queue(
     state: State<Db>,
     model: State<Model>,
@@ -219,7 +219,7 @@ pub fn review_queue(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn document_detail(
     state: State<Db>,
     model: State<Model>,
@@ -244,7 +244,7 @@ pub struct ValidateResult {
 /// applied, so the prequential log measures genuine out-of-sample
 /// performance rather than what the model looks like after learning from
 /// this very document.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn validate_document(
     state: State<Db>,
     model: State<Model>,
@@ -416,14 +416,14 @@ pub async fn retrieve_drawings_now(state: State<'_, Db>, doc_id: i64) -> Result<
 
 /// The Drawings tab's page images (SPEC section 8): `page` is 1-based for
 /// a real page, or `0` for the `FirstPageClipping` thumbnail.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_drawing_page(state: State<Db>, doc_id: i64, page: i64) -> Result<Vec<u8>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     crate::review::read_drawing_page(&conn, &state.data_dir, doc_id, page)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     labels::skip_document(&conn, doc_id).map_err(|e| e.to_string())
@@ -431,7 +431,7 @@ pub fn skip_document(state: State<Db>, doc_id: i64) -> Result<(), String> {
 
 /// On-demand retraining (SPEC 7.2: "or on demand"), in addition to the
 /// automatic every-10-validations trigger in `validate_document`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn retrain_now(state: State<Db>, model: State<Model>) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     crate::retrain::retrain_eligible_tags(&conn, &model.0, &current_timestamp())
@@ -453,7 +453,7 @@ pub struct TagMetricsRow {
     pub full_automation_n: i64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tag_metrics(state: State<Db>) -> Result<Vec<TagMetricsRow>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::list_active(&conn)
@@ -490,7 +490,7 @@ pub struct FullAutomationSummaryView {
 /// SPEC 7.6: "the Metrics screen shows the share of the last 300
 /// documents that would have been auto-completed" plus "counts of
 /// auto-completed, audited and focused-review documents."
-#[tauri::command]
+#[tauri::command(async)]
 pub fn full_automation_summary(state: State<Db>) -> Result<FullAutomationSummaryView, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let readiness =

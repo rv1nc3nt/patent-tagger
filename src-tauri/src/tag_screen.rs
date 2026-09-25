@@ -36,13 +36,13 @@ pub(crate) fn embed_saved_tag(conn: &Connection, embedder: &impl Embedder, tag: 
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_tags(state: State<Db>) -> Result<Vec<TagRow>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::list_active(&conn).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_archived_tags(state: State<Db>) -> Result<Vec<TagRow>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::list_archived(&conn).map_err(|e| e.to_string())
@@ -58,7 +58,7 @@ pub struct TagOverview {
 /// Every active tag with its label statistics and automatic-mode
 /// eligibility (SPEC section 8: "Statistics per tag ... automatic-mode
 /// toggle with eligibility status").
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tag_overview(state: State<Db>) -> Result<Vec<TagOverview>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let target_precision =
@@ -80,7 +80,7 @@ pub fn tag_overview(state: State<Db>) -> Result<Vec<TagOverview>, String> {
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_tag(
     state: State<Db>,
     model: State<Model>,
@@ -110,7 +110,7 @@ pub fn create_tag(
 /// `bump_version` marks a material definition change (SPEC 7.1). The
 /// embedding is recomputed whenever the name or definition changes.
 #[allow(clippy::too_many_arguments)]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_tag(
     state: State<Db>,
     model: State<Model>,
@@ -137,13 +137,13 @@ pub fn update_tag(
     Ok(updated.tag)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn archive_tag(state: State<Db>, tag_id: i64) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::archive(&conn, tag_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unarchive_tag(state: State<Db>, tag_id: i64) -> Result<tags::Restored, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     tags::unarchive(&conn, tag_id).map_err(|e| e.to_string())
@@ -151,7 +151,7 @@ pub fn unarchive_tag(state: State<Db>, tag_id: i64) -> Result<tags::Restored, St
 
 /// SPEC 7.1: stale labels "remain usable for training unless the user
 /// discards them". Returns how many were discarded.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn discard_stale_labels(state: State<Db>, tag_id: i64) -> Result<usize, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let tag = tags::get(&conn, tag_id)
@@ -176,7 +176,7 @@ fn active_tag(conn: &Connection, tag_id: i64) -> Result<TagRow, String> {
 
 /// SPEC 7.1: "review this tag against existing documents", sorted by
 /// descending score; unscored documents come last.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tag_review_queue(
     state: State<Db>,
     model: State<Model>,
@@ -237,7 +237,7 @@ fn score_for(
 /// first as a prediction (SPEC 7.4), just as validation does. A stale
 /// label's document was part of the training data, so its score is not
 /// out-of-sample and is not recorded.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn label_single_tag(
     state: State<Db>,
     model: State<Model>,

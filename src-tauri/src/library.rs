@@ -9,7 +9,7 @@ use core_lib::{documents, export, library, tags};
 use embed_lib::Embedder;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn library_search(
     state: State<Db>,
     filters: library::LibraryFilters,
@@ -18,7 +18,7 @@ pub fn library_search(
     library::search(&conn, &filters).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn similar_documents(
     state: State<Db>,
     model: State<Model>,
@@ -29,14 +29,14 @@ pub fn similar_documents(
     library::similar_to(&conn, doc_id, model.0.model_id(), limit).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_csv(state: State<Db>, dest_path: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let rows = export::export_rows(&conn).map_err(|e| e.to_string())?;
     std::fs::write(&dest_path, export::to_csv(&rows)).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_json(state: State<Db>, dest_path: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let rows = export::export_rows(&conn).map_err(|e| e.to_string())?;
@@ -44,7 +44,7 @@ pub fn export_json(state: State<Db>, dest_path: String) -> Result<(), String> {
     std::fs::write(&dest_path, json).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_tag_list(state: State<Db>, tag_id: i64, dest_path: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let pub_keys = export::pub_keys_for_tag(&conn, tag_id).map_err(|e| e.to_string())?;
@@ -57,7 +57,7 @@ pub fn export_tag_list(state: State<Db>, tag_id: i64, dest_path: String) -> Resu
 /// several tags is copied into each of their folders; one with none goes
 /// into [`export::UNTAGGED_FOLDER`]. Returns the number of documents
 /// exported (not of folders written).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_documents(
     state: State<Db>,
     doc_ids: Vec<i64>,

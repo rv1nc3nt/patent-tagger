@@ -24,7 +24,7 @@ pub struct SettingsView {
     pub drawings_policy_tag_ids: Vec<i64>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_settings(state: State<Db>) -> Result<SettingsView, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     Ok(SettingsView {
@@ -45,7 +45,7 @@ pub fn get_settings(state: State<Db>) -> Result<SettingsView, String> {
 /// SPEC 7.6: full automation "can be turned on only when at least one tag
 /// is in automatic mode" - enforced here, even though flipping it has no
 /// behavioural effect until M9 builds full automation itself.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_settings(state: State<Db>, view: SettingsView) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
 
@@ -101,26 +101,26 @@ pub fn update_settings(state: State<Db>, view: SettingsView) -> Result<(), Strin
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn data_directory(state: State<Db>) -> String {
     state.data_dir.display().to_string()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_backup(state: State<Db>, dest_path: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     crate::backup::create_backup(&state.data_dir, &conn, std::path::Path::new(&dest_path))
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_backup(state: State<Db>, src_path: String) -> Result<(), String> {
     let mut conn = state.conn.lock().map_err(|e| e.to_string())?;
     crate::backup::restore_backup(&state.data_dir, &mut conn, std::path::Path::new(&src_path))
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_tag_schema(state: State<Db>, dest_path: String) -> Result<(), String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let schema = tags::export_schema(&conn).map_err(|e| e.to_string())?;
@@ -130,7 +130,7 @@ pub fn export_tag_schema(state: State<Db>, dest_path: String) -> Result<(), Stri
 
 /// Add-only (SPEC section 8): see `tags::import_schema`. Each created tag
 /// gets its zero-shot embedding immediately, as in `create_tag`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn import_tag_schema(
     state: State<Db>,
     model: State<Model>,
