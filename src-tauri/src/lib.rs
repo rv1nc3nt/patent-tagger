@@ -11,6 +11,7 @@ mod platform;
 mod retrain;
 mod retrieval_worker;
 mod review;
+mod search;
 mod settings;
 mod tag_screen;
 
@@ -72,6 +73,12 @@ pub fn run() {
             library::export_tag_list,
             library::export_documents,
             library::bulk_retrieve,
+            search::list_searches,
+            search::preview_search_query,
+            search::create_search,
+            search::delete_search,
+            search::restart_search,
+            search::fetch_search_batch,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
